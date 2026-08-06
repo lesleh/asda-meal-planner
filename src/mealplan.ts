@@ -10,11 +10,16 @@
 
 import { Database } from "bun:sqlite";
 import { latestRun } from "./ingredients";
-import { costPlan, type Recipe } from "./plan";
+import { costPlan, type Line, type Recipe } from "./plan";
+import {
+  carryOverIndex, computeWaste, loadCarryOver, saveCarryOver,
+} from "./leftovers";
 import { DB_PATH, PLAN_PATH, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;
+/** Revise if more than this share of the shop ends up uneaten. */
+const WASTE_TARGET = 0.1;
 
 
 
@@ -50,8 +55,11 @@ function promotedIngredients(db: Database, runId: number, limit = 120): OfferRow
     .all(runId, ...COOKABLE_DEPARTMENTS, limit);
 }
 
-function buildPrompt(offers: OfferRow[], meals: number): string {
+function buildPrompt(offers: OfferRow[], meals: number, carried: string[]): string {
   const budget = HOUSEHOLD.budgetPerPortion * PEOPLE * meals;
+  const carriedSection = carried.length
+    ? `\nALREADY IN THE FRIDGE from last week — use these up first, they cost nothing:\n${carried.join("\n")}\n`
+    : "";
   const lines = offers.map((o) => {
     const pack = o.pack_quantity != null ? `${o.pack_quantity}${o.pack_unit}` : "?";
     const deal = o.promo ?? (o.discount_pct ? `-${o.discount_pct}%` : "reduced");
@@ -70,6 +78,7 @@ Total for the whole shop: £${budget.toFixed(2)}. This is a hard ceiling.
 ALREADY IN THE CUPBOARD — use freely, they cost nothing and must still be listed
 with "staple": true:
 ${PANTRY.join(", ")}
+${carriedSection}
 
 PROMOTED INGREDIENTS (cheapest per unit first):
 ${lines.join("\n")}
@@ -82,7 +91,8 @@ Rules:
 - Bulk meals out with potatoes, rice, pasta, pulses, tinned tomatoes and
   frozen vegetables. Children's meals do not need premium protein.
 - REUSE ingredients across meals so whole packs get used. If one meal uses
-  600g of a 1kg pack, have another use the rest.
+  600g of a 1kg pack, have another use the rest. Leaving most of a pack
+  uneaten is treated as waste and will be sent back for revision.
 - "term" is what you'd type into a supermarket search: "chicken thighs", not
   a brand name. Keep it short and generic.
 - Set "shelf" only when the term is genuinely ambiguous (e.g. term "potatoes",
@@ -96,11 +106,13 @@ Reply with ONLY a JSON array, no prose, no markdown fences:
 function buildRevisionPrompt(
   previous: string,
   recipes: Recipe[],
-  lines: ReturnType<typeof costPlan>,
+  lines: Line[],
   meals: number,
 ): string {
   const budget = HOUSEHOLD.budgetPerPortion * PEOPLE * meals;
   const total = lines.reduce((n, l) => n + l.cost, 0);
+  const waste = computeWaste(lines);
+  const overBudget = total > budget;
   const worst = lines
     .filter((l) => l.cost > 0)
     .sort((a, b) => b.cost - a.cost)
@@ -111,19 +123,41 @@ function buildRevisionPrompt(
       return `- ${l.term}: £${l.cost.toFixed(2)} — ${l.packs} x ${p?.packQuantity}${p?.packUnit} of "${p?.name}"${unit}, need ${l.needed}${l.unit}, ${l.leftover}${l.unit} wasted`;
     });
 
+  const leftovers = waste.lines
+    .slice(0, 8)
+    .map((w) => `- ${w.term}: you use only part of the pack, leaving ${w.leftover}${w.unit} of ${w.bought}${w.unit} unused (£${w.value.toFixed(2)} wasted)`);
+
+  const budgetSection = overBudget
+    ? `Your plan came to £${total.toFixed(2)} against a ceiling of £${budget.toFixed(2)}. It is £${(total - budget).toFixed(2)} OVER.
+
+Biggest costs, priced against real pack sizes:
+${worst.join("\n")}
+`
+    : `Your plan came to £${total.toFixed(2)}, within the £${budget.toFixed(2)} ceiling. Do not exceed it.
+`;
+
+  const wasteSection = waste.total > 0
+    ? `£${waste.total.toFixed(2)} of the shop (${((waste.total / total) * 100).toFixed(0)}%) is food you buy but never cook,
+because supermarket pack sizes don't match your quantities:
+
+${leftovers.join("\n")}
+`
+    : "";
+
   return `${previous}
 
 ---
 
-Your previous plan came to £${total.toFixed(2)} against a ceiling of £${budget.toFixed(2)}. It is £${(total - budget).toFixed(2)} over.
-
 The recipes you gave were: ${recipes.map((r) => r.name).join("; ")}
 
-Biggest costs, priced against real pack sizes:
-${worst.join("\n")}
+${budgetSection}
+${wasteSection}
+Revise the plan so that:
+${overBudget ? `- the total comes in under £${budget.toFixed(2)}\n` : ""}- the leftovers above are USED UP, not left in the fridge
 
-Revise the plan to come in under £${budget.toFixed(2)}. Cut or downgrade the
-expensive proteins, reduce meat quantities, and lean harder on cheap bulk.
+To use leftovers, either increase quantities in an existing meal so a whole
+pack gets eaten, or change a meal to include that ingredient. Whole packs
+eaten beats clever recipes. Keep the same number of meals.
 Reply with ONLY the corrected JSON array.`;
 }
 
@@ -150,7 +184,7 @@ async function ask(prompt: string): Promise<Recipe[]> {
 }
 
 /** Pantry items are consumed but not bought, so they cost nothing. */
-function applyPantry(lines: ReturnType<typeof costPlan>): ReturnType<typeof costPlan> {
+function applyPantry(lines: Line[]): Line[] {
   return lines.map((line) =>
     isPantry(line.term) || line.staple
       ? { ...line, cost: 0, staple: true, note: line.note ?? "from cupboard" }
@@ -167,19 +201,38 @@ if (import.meta.main) {
   console.log(`household: ${HOUSEHOLD.adults} adults + ${HOUSEHOLD.children} children = ${PEOPLE} people (${ADULT_EQUIVALENT.toFixed(1)} adult portions)`);
   console.log(`budget: £${HOUSEHOLD.budgetPerPortion.toFixed(2)}/portion x ${PEOPLE} x ${meals} meals = £${budget.toFixed(2)}\n`);
 
-  const basePrompt = buildPrompt(promotedIngredients(db, runId), meals);
+  const carried = loadCarryOver();
+  const carryOver = carryOverIndex(carried);
+  if (carried.length) {
+    console.log(`carried from last week: ${carried.map((c) => `${c.quantity}${c.unit} ${c.term}`).join(", ")}\n`);
+  }
+
+  const basePrompt = buildPrompt(
+    promotedIngredients(db, runId),
+    meals,
+    carried.map((c) => `- ${c.quantity}${c.unit} ${c.term}`),
+  );
   let prompt = basePrompt;
-  let best: { recipes: Recipe[]; lines: ReturnType<typeof costPlan>; total: number } | undefined;
+  let best: { recipes: Recipe[]; lines: Line[]; total: number; waste: number; score: number } | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const recipes = await ask(prompt);
-    const lines = applyPantry(costPlan(db, runId, recipes));
+    const lines = applyPantry(costPlan(db, runId, recipes, carryOver));
     const total = lines.reduce((n, l) => n + l.cost, 0);
+    const waste = computeWaste(lines).total;
+    // Waste is already inside `total`; counting it again breaks ties towards
+    // the plan that actually eats what it buys.
+    const score = total + waste;
 
-    console.log(`attempt ${attempt}: £${total.toFixed(2)} (${total <= budget ? "under" : `£${(total - budget).toFixed(2)} OVER`}) — ${recipes.map((r) => r.name).join("; ")}`);
+    const overBudget = total > budget;
+    const tooWasteful = total > 0 && waste / total > WASTE_TARGET;
+    console.log(
+      `attempt ${attempt}: £${total.toFixed(2)} (${overBudget ? `£${(total - budget).toFixed(2)} OVER` : "under budget"}), ` +
+      `£${waste.toFixed(2)} wasted (${total > 0 ? ((waste / total) * 100).toFixed(0) : 0}%) — ${recipes.map((r) => r.name).join("; ")}`,
+    );
 
-    if (!best || total < best.total) best = { recipes, lines, total };
-    if (total <= budget) break;
+    if (!best || score < best.score) best = { recipes, lines, total, waste, score };
+    if (!overBudget && !tooWasteful) break;
     if (attempt < MAX_ATTEMPTS) prompt = buildRevisionPrompt(basePrompt, recipes, lines, meals);
   }
 
@@ -216,9 +269,34 @@ if (import.meta.main) {
       (line.leftover > 0 ? `   ${line.leftover}${line.unit} spare` : ""),
     );
   }
+  // Persist what the plan doesn't cook, so next week can spend it.
+  const kept = saveCarryOver(
+    best.lines
+      .filter((l) => l.leftover > 0 && !l.staple)
+      .map((l) => ({
+        term: l.term,
+        unit: l.unit,
+        quantity: l.leftover,
+        department: l.department,
+        carriedOnly: l.packs === 0,
+        previousExpiry: carried.find((c) => c.term === l.term && c.unit === l.unit)?.expiresAt,
+      })),
+  );
+
   const cupboard = best.lines.filter((l) => l.staple).map((l) => l.term);
   console.log(`\n  from your cupboard (not bought): ${cupboard.join(", ") || "none"}`);
+  const usedCarryOver = best.lines.filter((l) => l.fromCarryOver > 0);
+  if (usedCarryOver.length) {
+    console.log(`  used from last week's leftovers: ${usedCarryOver.map((l) => `${l.fromCarryOver}${l.unit} ${l.term}`).join(", ")}`);
+  }
+
   console.log(`\n  TOTAL ${money(best.total)} vs budget ${money(budget)} — ${money(best.total / (PEOPLE * meals))}/portion`);
+  console.log(`  ${money(best.waste)} (${best.total > 0 ? ((best.waste / best.total) * 100).toFixed(0) : 0}%) left uneaten, carried to next week:`);
+  for (const item of kept.slice(0, 8)) {
+    const days = Math.max(0, Math.round((new Date(item.expiresAt).getTime() - Date.now()) / 86_400_000));
+    console.log(`    ${item.quantity}${item.unit} ${item.term} (keeps ~${days}d)`);
+  }
+  if (kept.length === 0) console.log("    nothing — the plan eats everything it buys");
   console.log(`  ${best.lines.filter((l) => l.product?.onOffer).length} of ${best.lines.filter((l) => l.product && l.cost > 0).length} bought lines on promotion`);
   db.close();
 }

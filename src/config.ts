@@ -8,13 +8,17 @@ const ROOT = new URL("../", import.meta.url).pathname;
 export const DB_PATH = `${ROOT}data/snapshot.db`;
 /** Most recent generated meal plan. */
 export const PLAN_PATH = `${ROOT}data/plan.json`;
+/** Directory holding all generated state. */
+export const DATA_DIR = `${ROOT}data`;
+/** Leftovers carried from the previous plan. */
+export const CARRYOVER_PATH = `${ROOT}data/carryover.json`;
 
 /**
  * Create `data/` if it is missing. It is gitignored in full, so a fresh clone
  * has no such directory and the first snapshot would otherwise fail.
  */
 export function ensureDataDir(): void {
-  mkdirSync(`${ROOT}data`, { recursive: true });
+  mkdirSync(DATA_DIR, { recursive: true });
 }
 
 export const HOUSEHOLD = {

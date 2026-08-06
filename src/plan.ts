@@ -10,6 +10,7 @@
 
 import { Database } from "bun:sqlite";
 import { type Candidate, latestRun, resolveIngredient } from "./ingredients";
+import { carryOverKey } from "./leftovers";
 import { DB_PATH } from "./config";
 
 
@@ -30,10 +31,15 @@ export interface Recipe {
   ingredients: RecipeIngredient[];
 }
 
-interface Line {
+export interface Line {
   term: string;
   unit: string;
+  /** Gross demand across all recipes, before carry-over is applied. */
   needed: number;
+  /** Supplied from last week's leftovers, so not bought again. */
+  fromCarryOver: number;
+  /** Department of the chosen product, for shelf-life purposes. */
+  department?: string;
   usedBy: { recipe: string; quantity: number }[];
   /** Cupboard item: costed, but excluded from the per-serving figure. */
   staple: boolean;
@@ -80,7 +86,13 @@ function packSupplies(candidate: Candidate, unit: string): number | undefined {
  * Costing per recipe would buy a 2kg bag of onions twice; aggregating first is
  * what makes "split ingredients across recipes" fall out for free.
  */
-export function costPlan(db: Database, runId: number, recipes: Recipe[]): Line[] {
+export function costPlan(
+  db: Database,
+  runId: number,
+  recipes: Recipe[],
+  /** Quantities already in stock, keyed by `term|unit`. */
+  carryOver: Map<string, number> = new Map(),
+): Line[] {
   const demand = new Map<string, { unit: string; total: number; shelf?: string; staple: boolean; usedBy: Line["usedBy"] }>();
 
   for (const recipe of recipes) {
@@ -100,10 +112,21 @@ export function costPlan(db: Database, runId: number, recipes: Recipe[]): Line[]
     }
   }
 
+  const available = new Map(carryOver);
   const lines: Line[] = [];
 
   for (const [key, entry] of demand) {
     const term = key.split("|")[0]!;
+
+    // Spend carried stock before buying. Claimed here so a second line with
+    // the same term can't spend it twice.
+    const stocked = available.get(carryOverKey(term, entry.unit)) ?? 0;
+    const fromCarryOver = Math.min(stocked, entry.total);
+    if (fromCarryOver > 0) {
+      available.set(carryOverKey(term, entry.unit), stocked - fromCarryOver);
+    }
+    const toBuy = entry.total - fromCarryOver;
+
     const resolved = resolveIngredient(db, runId, term, { shelf: entry.shelf, limit: 25 });
 
     // Pick the pack that costs least for the quantity actually needed, not the
@@ -113,9 +136,9 @@ export function costPlan(db: Database, runId: number, recipes: Recipe[]): Line[]
     const product = resolved.candidates.reduce<Candidate | undefined>((bestSoFar, candidate) => {
       if (packSupplies(candidate, entry.unit) === undefined) return bestSoFar;
       if (!bestSoFar) return candidate;
-      const cost = (c: Candidate) => Math.ceil(entry.total / packSupplies(c, entry.unit)!) * c.price;
+      const cost = (c: Candidate) => Math.ceil(toBuy / packSupplies(c, entry.unit)!) * c.price;
       const waste = (c: Candidate) =>
-        Math.ceil(entry.total / packSupplies(c, entry.unit)!) * packSupplies(c, entry.unit)! - entry.total;
+        Math.ceil(toBuy / packSupplies(c, entry.unit)!) * packSupplies(c, entry.unit)! - toBuy;
       const delta = cost(candidate) - cost(bestSoFar);
       if (delta < -0.001) return candidate;
       if (delta > 0.001) return bestSoFar;
@@ -123,26 +146,30 @@ export function costPlan(db: Database, runId: number, recipes: Recipe[]): Line[]
     }, undefined) ?? resolved.best;
 
     if (!product) {
-      lines.push({ term, unit: entry.unit, needed: entry.total, usedBy: entry.usedBy,
-        staple: entry.staple, product: undefined, packs: 0, bought: 0, leftover: 0, cost: 0, note: "no match" });
+      lines.push({ term, unit: entry.unit, needed: entry.total, fromCarryOver,
+        usedBy: entry.usedBy, staple: entry.staple, product: undefined,
+        packs: 0, bought: 0, leftover: 0, cost: 0, note: "no match" });
       continue;
     }
 
     const supplies = packSupplies(product, entry.unit);
     const unitsAgree = supplies !== undefined;
-    const packs = unitsAgree ? Math.ceil(entry.total / supplies) : 1;
+    // Carry-over may already cover the whole line, in which case buy nothing.
+    const packs = unitsAgree ? Math.ceil(toBuy / supplies) : toBuy > 0 ? 1 : 0;
     const bought = unitsAgree ? packs * supplies : 0;
 
     lines.push({
       term,
       unit: entry.unit,
       needed: entry.total,
+      fromCarryOver,
+      department: product.department ?? undefined,
       usedBy: entry.usedBy,
       staple: entry.staple,
       product,
       packs,
       bought,
-      leftover: unitsAgree ? bought - entry.total : 0,
+      leftover: unitsAgree ? bought + fromCarryOver - entry.total : 0,
       cost: Math.round(packs * product.price * 100) / 100,
       note: unitsAgree
         ? resolved.alternativeShelves.length > 0
