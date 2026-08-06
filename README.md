@@ -20,25 +20,57 @@ key and no other dependencies.
 
 ```bash
 bun install
-bun run snapshot     # ~11 requests, about 3 seconds
-bun run plan         # generate and cost a meal plan
+bun run cart:setup   # once: install the token bookmarklet (see step 3 below)
 ```
+
+## Weekly use
+
+The whole flow, from nothing to a filled basket, is four steps.
+
+```bash
+# 1. Refresh prices. ~11 requests, about 3 seconds.
+bun run snapshot
+
+# 2. Generate and cost a week of meals. Takes 3-12 minutes (it makes a few
+#    model calls and revises if it is over budget or wasteful). Writes the
+#    plan to data/plan.md (open it to see the recipes and shopping list).
+bun run plan 4
+
+# 3. Get a token for your account:
+#    log in to asda.com, then click the "ASDA token" bookmark installed by
+#    cart:setup. It copies a 30-minute token to your clipboard.
+
+# 4. Fill your basket from that token.
+bun run cart
+```
+
+Then review the basket at asda.com and check out yourself; the tool never does.
+
+After you have cooked, record what landed so next week varies and improves:
+
+```bash
+bun run rate "Chicken Fajitas" loved   # do it again
+bun run rate "Liver and Onions" no     # never again
+```
+
+Steps 1-2 are read-only and need no token. Step 4 is the only one that writes to
+your account. Leftovers from step 2 carry into next week's plan automatically.
 
 ## Commands
 
-| Command                 | What it does                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------ |
-| `bun run snapshot`      | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run |
-| `bun run snapshot:diff` | Diff the two most recent runs without fetching                                             |
-| `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals. Takes 3-12 minutes |
-| `bun run rate`          | List everything cooked so far, with repeat counts and cost per person                      |
-| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions      |
-| `bun run cart:setup`    | Copy the token-grabbing bookmarklet to your clipboard, with install instructions           |
-| `bun run cart --dry-run` | Show the shopping list that would be added, no network                                     |
-| `bun run cart`          | Add the current plan's shopping list to your ASDA basket (needs a pasted token)            |
-| `bun run search <term>` | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`           |
-| `bun test`              | Unit tests for pack parsing and ingredient resolution                                      |
-| `bun run check-types`   | `tsc --noEmit`                                                                             |
+| Command                                    | What it does                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `bun run snapshot`                         | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run             |
+| `bun run snapshot:diff`                    | Diff the two most recent runs without fetching                                                         |
+| `bun run plan [meals]`                     | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals. Takes 3-12 minutes |
+| `bun run rate`                             | List everything cooked so far, with repeat counts and cost per person                                  |
+| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions                                       |
+| `bun run cart:setup`                       | Copy the token-grabbing bookmarklet to your clipboard, with install instructions                       |
+| `bun run cart --dry-run`                   | Show the shopping list that would be added, no network                                                 |
+| `bun run cart`                             | Add the current plan's shopping list to your ASDA basket (needs a pasted token)                        |
+| `bun run search <term>`                    | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`                       |
+| `bun test`                                 | Unit tests for pack parsing and ingredient resolution                                                  |
+| `bun run check-types`                      | `tsc --noEmit`                                                                                         |
 
 ## Configuration
 
@@ -185,7 +217,7 @@ Note that the Salesforce API is reached at its origin host rather than through
 
 `bun run cart` pushes the current plan's shopping list into your ASDA basket. It is
 the only part of the tool that writes to ASDA; everything else reads. It fills the
-basket and stops. **It never places an order** — you review and check out yourself.
+basket and stops. **It never places an order**; you review and check out yourself.
 
 It needs a token bound to your account, which the anonymous guest flow cannot mint.
 You paste one from a logged-in browser session; it lasts 30 minutes and is never
