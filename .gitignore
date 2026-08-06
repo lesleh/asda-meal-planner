@@ -9,7 +9,9 @@ data/*.db-wal
 data/plan.json
 data/snacks.json
 
-# Recipe history and the snack blocklist cannot be regenerated (they are
-# hand-curated), so they are tracked rather than ignored.
+# The snack blocklist is personal taste; kept local so it never goes public
+# and never causes pull conflicts.
+data/blocklist.json
+
+# Recipe history cannot be regenerated (it is hand-curated), so it is tracked.
 !data/history.json
-!data/blocklist.json

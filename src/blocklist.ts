@@ -5,8 +5,8 @@
  * whole taste-preference layer: rather than encoding rules for what the
  * household dislikes, it is curated one "no" at a time from real lists.
  *
- * Tracked in git like history, because it is hand-curated and cannot be
- * regenerated.
+ * Kept local (gitignored): it is personal taste, so it never goes to the
+ * public repo and never causes pull conflicts.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

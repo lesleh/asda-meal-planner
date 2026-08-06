@@ -171,7 +171,7 @@ seconds; a year of "the children actually ate this" does not.
 Snacks are handled apart from meals, because they are taste-driven and the household
 grazes through them fast. `bun run snacks` fills a snack allowance from genuine
 reductions, shows the list as checkboxes, and lets you tick any you don't want. A
-rejected snack goes on a blocklist (`data/blocklist.json`, tracked) and is never
+rejected snack goes on a blocklist (`data/blocklist.json`, kept local) and is never
 offered again, so the list is curated by rejection rather than by rules: the disliked
 mince, the aloe water, whatever, one "no" at a time. Rejections refill the list
 instantly, since snacks need no model. Accept, and it writes `data/snacks.json`.
