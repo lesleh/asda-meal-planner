@@ -24,15 +24,34 @@ export interface Preference {
   allow?: RegExp;
 }
 
-export const PREFERENCES: Preference[] = [
-  {
-    id: "no-bones",
-    description:
-      "No chicken or meat on the bone. The children won't eat it. " +
-      "Use breast fillets, boneless thigh fillets, mince or diced meat.",
-    reject: /drumstick|chicken wing|leg quarter|on the bone|bone-in|whole chicken|spare rib|thigh/i,
-    allow: /boneless|fillet|mince|diced/i,
-  },
+/** The children will not eat meat on the bone. */
+export const NO_BONES: Preference = {
+  id: "no-bones",
+  description:
+    "No chicken or meat on the bone. The children won't eat it. " +
+    "Use breast fillets, boneless thigh fillets, mince or diced meat.",
+  reject: /drumstick|chicken wing|leg quarter|on the bone|bone-in|whole chicken|spare rib|thigh/i,
+  allow: /boneless|fillet|mince|diced/i,
+};
+
+/**
+ * Active preferences.
+ *
+ * Add sparingly. A reject pattern is a blunt instrument and it is easy to rule
+ * out more than intended, so anything without a clear lexical signal in the
+ * product name belongs in `DIETARY_NOTES` instead.
+ */
+export const PREFERENCES: Preference[] = [NO_BONES];
+
+/**
+ * Guidance passed to the model but never used to filter products.
+ *
+ * The home for anything with no lexical signal in a product name. "Nothing
+ * too spicy" cannot be pattern-matched the way "drumstick" can, so it has to
+ * shape the recipes rather than the shopping.
+ */
+export const DIETARY_NOTES: string[] = [
+  "Nothing very spicy; mild flavours for the children.",
 ];
 
 export interface Rejection {
@@ -55,7 +74,13 @@ export function rejectionFor(
   return undefined;
 }
 
-/** Prompt-facing lines, so the model plans meals that fit in the first place. */
-export function preferenceLines(preferences: Preference[] = PREFERENCES): string[] {
-  return preferences.map((preference) => `- ${preference.description}`);
+/**
+ * Prompt-facing lines. Includes notes that have no matching filter, since the
+ * model is the only thing that can act on those.
+ */
+export function preferenceLines(
+  preferences: Preference[] = PREFERENCES,
+  notes: string[] = DIETARY_NOTES,
+): string[] {
+  return [...preferences.map((p) => `- ${p.description}`), ...notes.map((n) => `- ${n}`)];
 }

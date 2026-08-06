@@ -12,7 +12,7 @@
 
 import { Database } from "bun:sqlite";
 import { DB_PATH } from "./config";
-import { rejectionFor } from "./preferences";
+import { PREFERENCES, type Preference, rejectionFor } from "./preferences";
 
 
 export interface Candidate {
@@ -63,6 +63,8 @@ export interface ResolvedIngredient {
 export interface ResolveOptions {
   /** Skip household preference filtering. Off by default. */
   ignorePreferences?: boolean;
+  /** Override the active preference list, mainly for tests. */
+  preferences?: Preference[];
   /** Only consider products flagged as on offer. */
   onOfferOnly?: boolean;
   /** Restrict to a shelf directly, skipping the disambiguation heuristic. */
@@ -309,7 +311,7 @@ export function resolveIngredient(
   const permitted = options.ignorePreferences
     ? onShelf
     : onShelf.filter((candidate) => {
-        const rejection = rejectionFor(candidate);
+        const rejection = rejectionFor(candidate, options.preferences ?? PREFERENCES);
         if (rejection) {
           rejected.push({ candidate, preferenceId: rejection.preferenceId });
           return false;

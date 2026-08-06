@@ -42,7 +42,8 @@ Everything tunable lives in `src/config.ts`.
 - `HOUSEHOLD` sets adults, children, the child portion fraction, and the per-portion budget
 - `PANTRY` lists ingredients assumed already owned, so a plan does not buy a litre of oil to use 45ml
 - `STORE_ID` selects the store that stock and pricing are scoped to
-- `PREFERENCES` in `src/preferences.ts` records household dislikes
+- `PREFERENCES` in `src/preferences.ts` rejects products the household won't eat
+- `DIETARY_NOTES` in the same file guides the model without filtering products
 
 ## Preferences
 
@@ -51,6 +52,11 @@ model emits a search term ("chicken thighs"); the resolver picks the product.
 Telling the model "no bones" achieves nothing on its own, because the resolver will
 still return bone-in thighs as the cheapest match. So each preference carries both a
 description for the prompt and a pattern the resolver rejects candidates with.
+
+Not every preference can work that way. "Nothing very spicy" has no lexical signal in
+a product name, so it lives in `DIETARY_NOTES`, reaches the prompt, and shapes the
+recipes rather than the shopping. Reach for a reject pattern only when the wording is
+reliable; it is a blunt instrument and easy to over-apply.
 
 Rejected candidates are kept rather than discarded, so a plan can report what a
 preference costs. Avoiding bone-in chicken adds about £4 to a generic "chicken
