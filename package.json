@@ -2,6 +2,7 @@
   "name": "asda-meal-planner",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Builds budget-constrained family meal plans from ASDA's current promotional pricing.",
   "scripts": {

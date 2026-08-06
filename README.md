@@ -256,3 +256,8 @@ command, and always leaves the final checkout to you.
 Uses undocumented endpoints. Fine for personal use at the volume here, roughly 11
 requests per snapshot, but very likely against ASDA's terms of use. Do not point it
 at anything sustained or high-volume.
+
+## License
+
+[MIT](LICENSE). Note this licenses the planner's own code; it does not grant
+any rights over ASDA's data or APIs, and the personal-use caveats above still apply.
