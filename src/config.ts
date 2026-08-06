@@ -8,6 +8,8 @@ const ROOT = new URL("../", import.meta.url).pathname;
 export const DB_PATH = `${ROOT}data/snapshot.db`;
 /** Most recent generated meal plan. */
 export const PLAN_PATH = `${ROOT}data/plan.json`;
+/** Same plan, rendered to read, cook and shop from. */
+export const PLAN_MD_PATH = `${ROOT}data/plan.md`;
 /** Directory holding all generated state. */
 export const DATA_DIR = `${ROOT}data`;
 /** Leftovers carried from the previous plan. */

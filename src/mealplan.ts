@@ -11,10 +11,12 @@
 import { Database } from "bun:sqlite";
 import { latestRun } from "./ingredients";
 import { costPlan, type Line, type Recipe } from "./plan";
+import { buildArtifact, renderMarkdown } from "./report";
+import { validateRecipes, validateResolution } from "./validate";
 import {
   carryOverIndex, computeWaste, loadCarryOver, saveCarryOver,
 } from "./leftovers";
-import { DB_PATH, PLAN_PATH, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
+import { DB_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;
@@ -98,9 +100,16 @@ Rules:
 - Set "shelf" only when the term is genuinely ambiguous (e.g. term "potatoes",
   shelf "White Potatoes").
 - Mark anything from the cupboard list with "staple": true.
+- ONE ingredient per entry. Never "carrots and broccoli" or "salt and pepper";
+  those are two entries. A term with "and" in it cannot be shopped for.
+- Never list the same ingredient twice in one recipe. Add the quantities up.
+- Give a "method": an array of short numbered cooking steps, enough for
+  someone to actually cook the meal. Six to ten steps is usually right.
 
 Reply with ONLY a JSON array, no prose, no markdown fences:
-[{"name":"string","serves":${PEOPLE},"ingredients":[{"term":"string","quantity":0,"unit":"g"|"ml"|"ea","shelf":"string?","staple":true}]}]`;
+[{"name":"string","serves":${PEOPLE},
+  "method":["step one","step two"],
+  "ingredients":[{"term":"string","quantity":0,"unit":"g"|"ml"|"ea","shelf":"string?","staple":true}]}]`;
 }
 
 function buildRevisionPrompt(
@@ -158,7 +167,8 @@ ${overBudget ? `- the total comes in under £${budget.toFixed(2)}\n` : ""}- the 
 To use leftovers, either increase quantities in an existing meal so a whole
 pack gets eaten, or change a meal to include that ingredient. Whole packs
 eaten beats clever recipes. Keep the same number of meals.
-Reply with ONLY the corrected JSON array.`;
+Keep the "method" steps for any meal you leave unchanged, and write new ones
+for any meal you change. Reply with ONLY the corrected JSON array.`;
 }
 
 function extractJson(text: string): string {
@@ -238,7 +248,6 @@ if (import.meta.main) {
 
   if (!best) throw new Error("no plan produced");
   ensureDataDir();
-  await Bun.write(PLAN_PATH, JSON.stringify(best.recipes, null, 2));
 
   const money = (n: number) => `£${n.toFixed(2)}`;
   const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
@@ -283,6 +292,23 @@ if (import.meta.main) {
       })),
   );
 
+  const warnings = [...validateResolution(best.lines), ...validateRecipes(best.recipes)];
+
+  const artifact = buildArtifact({
+    recipes: best.recipes,
+    lines: best.lines,
+    runId,
+    storeId: STORE_ID,
+    household: { adults: HOUSEHOLD.adults, children: HOUSEHOLD.children, people: PEOPLE },
+    budget: { perPortion: HOUSEHOLD.budgetPerPortion, total: budget, portions: PEOPLE * meals },
+    waste: best.waste,
+    carriedIn: carried,
+    carriedOut: kept,
+    warnings,
+  });
+  await Bun.write(PLAN_PATH, JSON.stringify(artifact, null, 2));
+  await Bun.write(PLAN_MD_PATH, renderMarkdown(artifact));
+
   const cupboard = best.lines.filter((l) => l.staple).map((l) => l.term);
   console.log(`\n  from your cupboard (not bought): ${cupboard.join(", ") || "none"}`);
   const usedCarryOver = best.lines.filter((l) => l.fromCarryOver > 0);
@@ -298,5 +324,11 @@ if (import.meta.main) {
   }
   if (kept.length === 0) console.log("    nothing — the plan eats everything it buys");
   console.log(`  ${best.lines.filter((l) => l.product?.onOffer).length} of ${best.lines.filter((l) => l.product && l.cost > 0).length} bought lines on promotion`);
+  if (warnings.length) {
+    console.log(`\n  warnings:`);
+    for (const warning of warnings) console.log(`    ${warning}`);
+  }
+  console.log(`\n  written: ${PLAN_MD_PATH}`);
+  console.log(`           ${PLAN_PATH}`);
   db.close();
 }

@@ -30,7 +30,7 @@ bun run plan         # generate and cost a meal plan
 | ----------------------- | ------------------------------------------------------------------------------------------ |
 | `bun run snapshot`      | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run |
 | `bun run snapshot:diff` | Diff the two most recent runs without fetching                                             |
-| `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget. Defaults to 4 meals                     |
+| `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals          |
 | `bun run search <term>` | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`           |
 | `bun test`              | Unit tests for pack parsing and ingredient resolution                                      |
 | `bun run check-types`   | `tsc --noEmit`                                                                             |
@@ -42,6 +42,19 @@ Everything tunable lives in `src/config.ts`.
 - `HOUSEHOLD` sets adults, children, the child portion fraction, and the per-portion budget
 - `PANTRY` lists ingredients assumed already owned, so a plan does not buy a litre of oil to use 45ml
 - `STORE_ID` selects the store that stock and pricing are scoped to
+
+## Output
+
+A run writes two files.
+
+- `data/plan.md` is the one to read: shopping list with prices, then each recipe with
+  its ingredients, resolved products and cooking method.
+- `data/plan.json` is the same plan structured, including per-ingredient costs, the
+  snapshot run it was priced against, and any warnings. Re-costable and diffable.
+
+Warnings call out ingredients that matched no product, since those silently drop off
+the shopping list and understate the total, plus malformed model output such as two
+ingredients in one search term.
 
 ## Leftovers
 

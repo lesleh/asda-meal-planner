@@ -28,6 +28,8 @@ export interface RecipeIngredient {
 export interface Recipe {
   name: string;
   serves: number;
+  /** Numbered cooking steps. A plan you can't cook from isn't a plan. */
+  method?: string[];
   ingredients: RecipeIngredient[];
 }
 
