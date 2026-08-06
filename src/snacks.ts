@@ -59,6 +59,28 @@ export interface SnackOptions {
 const GENUINE_CUT = /rollback|dropped/i;
 
 /**
+ * Drinks are grazeable but they are not snacks: squash, juice, fizzy, water,
+ * coconut water and the like belong in a drinks line of their own, not the
+ * snack allowance. Excluded here so the picker never offers three squashes.
+ */
+const DRINK = new RegExp(
+  [
+    "squash|cordial",
+    "fizzy|cola|lemonade",
+    "juice|smoothie",
+    "\\bwater\\b|coconut water|tonic|mixer",
+    "energy.*drink|sports.*drink|health.*drink|soft drink",
+    "milk drink|milkshake|yogurt drink|drinking yogurt",
+    "lunchbox drink|kids.*drink",
+    "coffee|\\btea\\b",
+  ].join("|"),
+  "i",
+);
+
+const isDrink = (department: string | null, shelf: string | null, name: string): boolean =>
+  DRINK.test(`${department ?? ""} ${shelf ?? ""} ${name}`);
+
+/**
  * Pick snacks to fill the cart up to `targetSpend`.
  *
  * Ranked by discount then unit price, so the best-value real reductions go in
@@ -88,6 +110,8 @@ export function selectSnacks(
     if (exclude.has(row.cin)) return false;
     // Snacks are, by definition, the grazeable things the meal pass ignores.
     if (!isGrazeable(row.department, row.shelf, row.name)) return false;
+    // Drinks are grazeable but not snacks.
+    if (isDrink(row.department, row.shelf, row.name)) return false;
     // Only genuine cuts, not multibuys or list prices.
     if (!GENUINE_CUT.test(row.offer_label ?? "")) return false;
     // Respect the same household preferences the resolver enforces.

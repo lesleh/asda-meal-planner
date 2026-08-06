@@ -55,3 +55,12 @@ describe("snack variety", () => {
     for (const n of byDept.values()) expect(n).toBeLessThanOrEqual(3);
   });
 });
+
+describe("snacks exclude drinks", () => {
+  test("no squash, juice, fizzy or water in the snack list", () => {
+    const picks = selectSnacks(db, latestRun(db), { targetSpend: 20, maxSpend: 25 }, 0);
+    for (const p of picks) {
+      expect(`${p.department} ${p.name}`).not.toMatch(/squash|cordial|juice|fizzy|smoothie|\bwater\b/i);
+    }
+  });
+});
