@@ -5,9 +5,11 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 
-# Generated meal plans.
+# Generated meal plans and the approved snack list; regenerated each run.
 data/plan.json
+data/snacks.json
 
-# Recipe history is the one thing here that cannot be regenerated, so it is
-# tracked rather than ignored.
+# Recipe history and the snack blocklist cannot be regenerated (they are
+# hand-curated), so they are tracked rather than ignored.
 !data/history.json
+!data/blocklist.json

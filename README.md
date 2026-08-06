@@ -166,6 +166,20 @@ bun run rate "Liver and Onions" no        # never again
 History is tracked in git, unlike the rest of `data/`. The snapshot rebuilds in three
 seconds; a year of "the children actually ate this" does not.
 
+## Snacks
+
+Snacks are handled apart from meals, because they are taste-driven and the household
+grazes through them fast. `bun run snacks` fills a snack allowance from genuine
+reductions, shows the list as checkboxes, and lets you tick any you don't want. A
+rejected snack goes on a blocklist (`data/blocklist.json`, tracked) and is never
+offered again, so the list is curated by rejection rather than by rules: the disliked
+mince, the aloe water, whatever, one "no" at a time. Rejections refill the list
+instantly, since snacks need no model. Accept, and it writes `data/snacks.json`.
+
+The snack list is separate from the meal shop, so the cart can add them independently:
+`bun run cart` for the meals, `bun run cart --snacks` for the snacks. Run the meal
+plan with `--no-snacks` if you would rather it never touches snacks at all.
+
 ## Leftovers
 
 Supermarket pack sizes do not match recipe quantities, so a plan that buys 2kg of

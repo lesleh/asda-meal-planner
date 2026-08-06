@@ -19,6 +19,13 @@ export const DATA_DIR = `${ROOT}data`;
 export const HISTORY_PATH = `${ROOT}data/history.json`;
 /** Leftovers carried from the previous plan. */
 export const CARRYOVER_PATH = `${ROOT}data/carryover.json`;
+/**
+ * Snacks the household rejected. Tracked in git like history: it is curated by
+ * hand and cannot be regenerated.
+ */
+export const BLOCKLIST_PATH = `${ROOT}data/blocklist.json`;
+/** The approved snack list, its own file so the cart can add it alone. */
+export const SNACKS_PATH = `${ROOT}data/snacks.json`;
 
 /**
  * Create `data/` if it is missing. It is gitignored in full, so a fresh clone

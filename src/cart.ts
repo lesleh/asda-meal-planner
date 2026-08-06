@@ -15,7 +15,7 @@
  */
 
 import { ASDA_COMMERCE } from "./slas";
-import { PLAN_PATH } from "./config";
+import { PLAN_PATH, SNACKS_PATH } from "./config";
 
 const BASE = `https://${ASDA_COMMERCE.shortCode}.api.commercecloud.salesforce.com`;
 const SITE = ASDA_COMMERCE.channelId;
@@ -42,6 +42,7 @@ Each time you want to shop:
 Other:
 
   bun run cart --dry-run    Show what would be added, no network, no token needed.
+  bun run cart --snacks     Add only the approved snack list (bun run snacks).
 
 The token lasts 30 minutes and is never stored. It is read from the clipboard,
 or from the ASDA_TOKEN environment variable if that is set. This fills the
@@ -58,8 +59,34 @@ interface ShoppingItem {
 interface Plan {
   generatedAt: string;
   shoppingList: ShoppingItem[];
-  /** Snacks added to clear the delivery minimum; carted alongside the meals. */
-  snacks?: { cin: string; name: string; packs: number; cost: number }[];
+  /** The plan's own auto-snacks, unless it was run with --no-snacks. */
+  snacks?: CartItem[];
+}
+
+interface CartItem {
+  cin: string;
+  name: string;
+  packs: number;
+  cost: number;
+}
+
+/**
+ * The meal plan's shopping list, plus its own auto-snacks. Running the plan
+ * with --no-snacks leaves the snacks to the separate `bun run snacks` flow.
+ */
+async function loadMealShop(): Promise<CartItem[]> {
+  const file = Bun.file(PLAN_PATH);
+  if (!(await file.exists())) return [];
+  const plan = (await file.json()) as Plan;
+  return [...plan.shoppingList, ...(plan.snacks ?? [])].filter((item) => item.packs > 0);
+}
+
+/** The separately-approved snack list. */
+async function loadSnacks(): Promise<CartItem[]> {
+  const file = Bun.file(SNACKS_PATH);
+  if (!(await file.exists())) return [];
+  const snacks = (await file.json()) as CartItem[];
+  return snacks.filter((item) => item.packs > 0);
 }
 
 /** Decode a JWT payload without verifying it; we only read our own claims. */
@@ -141,19 +168,20 @@ async function main(): Promise<void> {
   if (args.has("--help") || args.has("-h")) return help();
   if (args.has("--bookmarklet")) return installBookmarklet();
 
-  const plan = (await Bun.file(PLAN_PATH).json()) as Plan;
-  // Snacks are part of the shop: they clear the delivery minimum, so they go in
-  // the basket with the meal ingredients.
-  const items = [
-    ...plan.shoppingList,
-    ...(plan.snacks ?? []).map((s) => ({ cin: s.cin, name: s.name, packs: s.packs, cost: s.cost })),
-  ].filter((item) => item.packs > 0);
+  // The snacks list is its own file, approved separately via `bun run snacks`.
+  // --snacks adds only that; otherwise the meal plan's shopping list.
+  const snacksOnly = args.has("--snacks");
+  const items = snacksOnly ? await loadSnacks() : await loadMealShop();
   if (items.length === 0) {
-    console.log("nothing to add — run `bun run plan` first");
+    console.log(
+      snacksOnly
+        ? "no snacks — run `bun run snacks` first"
+        : "nothing to add — run `bun run plan` first",
+    );
     return;
   }
 
-  console.log(`plan from ${plan.generatedAt.slice(0, 10)}: ${items.length} items`);
+  console.log(`${snacksOnly ? "snacks" : "meal shop"}: ${items.length} items`);
   for (const item of items) {
     console.log(`  ${item.packs} x ${item.name}  (cin ${item.cin})  £${item.cost.toFixed(2)}`);
   }

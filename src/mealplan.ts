@@ -16,6 +16,7 @@ import { validateRecipes, validateResolution } from "./validate";
 import { preferenceLines } from "./preferences";
 import { isGrazeable } from "./grazeable";
 import { selectSnacks, type SnackPick } from "./snacks";
+import { blockedCins } from "./blocklist";
 import { loadRules, priceBasket, type BasketItem } from "./multibuy";
 import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "./history";
 import { carryOverIndex, loadCarryOver, saveCarryOver } from "./leftovers";
@@ -218,7 +219,9 @@ function applyPantry(lines: Line[]): Line[] {
 }
 
 if (import.meta.main) {
-  const meals = Number(process.argv[2] ?? 4);
+  const argv = new Set(process.argv.slice(2));
+  const noSnacks = argv.has("--no-snacks");
+  const meals = Number(process.argv.find((a) => /^\d+$/.test(a)) ?? 4);
   const db = new Database(DB_PATH, { readonly: true });
   const runId = latestRun(db);
 
@@ -290,11 +293,14 @@ if (import.meta.main) {
     BUDGET.deliveryMinimum,
     mealCost + BUDGET.snackAllowance,
   );
-  const snacks = selectSnacks(db, runId, {
-    targetSpend: snackTargetCart,
-    maxSpend: BUDGET.maxSnackSpend,
-    exclude: inBasket,
-  }, mealCost);
+  for (const cin of blockedCins()) inBasket.add(cin);
+  const snacks = noSnacks
+    ? []
+    : selectSnacks(db, runId, {
+        targetSpend: snackTargetCart,
+        maxSpend: BUDGET.maxSnackSpend,
+        exclude: inBasket,
+      }, mealCost);
   const snackCost = Math.round(snacks.reduce((n: number, s: SnackPick) => n + s.cost, 0) * 100) / 100;
   const shopTotal = Math.round((mealCost + snackCost) * 100) / 100;
 

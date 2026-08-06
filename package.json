@@ -9,6 +9,7 @@
     "snapshot": "bun run src/snapshot.ts",
     "snapshot:diff": "bun run src/snapshot.ts --diff",
     "plan": "bun run src/mealplan.ts",
+    "snacks": "bun run src/snacks-run.ts",
     "search": "bun run src/ingredients.ts",
     "test": "bun test",
     "check-types": "tsc --noEmit",
@@ -19,5 +20,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0"
   }
 }
