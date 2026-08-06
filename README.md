@@ -33,6 +33,7 @@ bun run plan         # generate and cost a meal plan
 | `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals. Takes 3-12 minutes |
 | `bun run rate`          | List everything cooked so far, with repeat counts and cost per person                      |
 | `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions      |
+| `bun run cart:setup`    | Copy the token-grabbing bookmarklet to your clipboard, with install instructions           |
 | `bun run cart --dry-run` | Show the shopping list that would be added, no network                                     |
 | `bun run cart`          | Add the current plan's shopping list to your ASDA basket (needs a pasted token)            |
 | `bun run search <term>` | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`           |
@@ -188,13 +189,19 @@ basket and stops. **It never places an order** — you review and check out your
 
 It needs a token bound to your account, which the anonymous guest flow cannot mint.
 You paste one from a logged-in browser session; it lasts 30 minutes and is never
-stored. Run `bun run cart --help` for a one-click bookmarklet that copies it, or a
-devtools console one-liner. Then:
+stored. The flow is three commands, once for setup and two each time you shop:
 
 ```bash
-bun run cart --dry-run                  # what would be added, no network
-ASDA_TOKEN="$(pbpaste)" bun run cart    # add to your basket from the clipboard
+bun run cart:setup      # once: copies a bookmarklet to your clipboard, tells you
+                        # how to save it as a browser bookmark
+
+# then, each time you want to shop:
+#   1. log in to asda.com and click the bookmark (copies your token)
+bun run cart            # 2. reads the token from the clipboard, fills your basket
 ```
+
+`bun run cart --dry-run` shows the shopping list without touching the network, and
+setting `ASDA_TOKEN` overrides the clipboard if you would rather pass it explicitly.
 
 The token's `SLAS.AUTH_TOKEN` cookie is not HttpOnly, so JavaScript can read it
 directly: no decryption, no keychain. Its embedded customer id is what targets your

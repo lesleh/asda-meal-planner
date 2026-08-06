@@ -20,7 +20,7 @@ import { PLAN_PATH } from "./config";
 const BASE = `https://${ASDA_COMMERCE.shortCode}.api.commercecloud.salesforce.com`;
 const SITE = ASDA_COMMERCE.channelId;
 
-const BOOKMARKLET =
+export const BOOKMARKLET =
   "javascript:(()=>{const m=document.cookie.match(/SLAS\\.AUTH_TOKEN=([^;]+)/);" +
   "if(!m){alert('Not logged in to asda.com, or the token has expired.');return;}" +
   "navigator.clipboard.writeText(decodeURIComponent(m[1]));" +
@@ -29,27 +29,23 @@ const BOOKMARKLET =
 function help(): void {
   console.log(`Push the current plan's shopping list into your ASDA basket.
 
-Getting a token (it lasts 30 minutes, and is never stored):
+One-time setup:
 
-  1. Log in to asda.com in your browser.
-  2. Easiest: make a bookmark with this as its URL, then click it while on asda.com:
+  bun run cart:setup    Copies a bookmarklet to your clipboard and explains how
+                        to save it as a browser bookmark.
 
-${BOOKMARKLET}
+Each time you want to shop:
 
-     It copies the token to your clipboard.
+  1. Log in to asda.com and click the bookmark. It copies your token.
+  2. bun run cart       Reads the token from the clipboard and fills your basket.
 
-  3. Or, in the browser devtools Console on asda.com, run:
+Other:
 
-     copy(decodeURIComponent(document.cookie.match(/SLAS\\.AUTH_TOKEN=([^;]+)/)[1]))
+  bun run cart --dry-run    Show what would be added, no network, no token needed.
 
-Then, in this directory:
-
-  bun run cart --dry-run          # show what would be added, no network
-  ASDA_TOKEN="$(pbpaste)" bun run cart   # add to your basket from the clipboard
-
-The token is read from the ASDA_TOKEN environment variable, or from the
-clipboard (pbpaste) if that is unset. It fills the basket and stops; it never
-checks out.`);
+The token lasts 30 minutes and is never stored. It is read from the clipboard,
+or from the ASDA_TOKEN environment variable if that is set. This fills the
+basket and stops; it never checks out.`);
 }
 
 interface ShoppingItem {
@@ -141,6 +137,7 @@ async function resolveBasket(token: string, identity: Identity): Promise<string>
 async function main(): Promise<void> {
   const args = new Set(process.argv.slice(2));
   if (args.has("--help") || args.has("-h")) return help();
+  if (args.has("--bookmarklet")) return installBookmarklet();
 
   const plan = (await Bun.file(PLAN_PATH).json()) as Plan;
   const items = plan.shoppingList.filter((item) => item.packs > 0);
@@ -207,7 +204,7 @@ async function main(): Promise<void> {
   console.log("\nReview and check out at https://www.asda.com/ — this tool never places the order.");
 }
 
-/** macOS clipboard, so `pbpaste` isn't needed in the command line. */
+/** Read the macOS clipboard, so `pbpaste` isn't needed on the command line. */
 async function clipboard(): Promise<string | undefined> {
   try {
     const proc = Bun.spawn(["pbpaste"], { stdout: "pipe" });
@@ -215,6 +212,34 @@ async function clipboard(): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** Write to the macOS clipboard. */
+export async function writeClipboard(text: string): Promise<void> {
+  const proc = Bun.spawn(["pbcopy"], { stdin: "pipe" });
+  proc.stdin.write(text);
+  await proc.stdin.end();
+  await proc.exited;
+}
+
+/** Copy the bookmarklet to the clipboard, then explain how to install it. */
+async function installBookmarklet(): Promise<void> {
+  await writeClipboard(BOOKMARKLET);
+  console.log(`Bookmarklet copied to your clipboard.
+
+To install it:
+  1. Open your browser's bookmark manager (Chrome: Bookmarks > Bookmark Manager).
+  2. Add a new bookmark. Name it e.g. "ASDA token".
+  3. Paste the clipboard into the URL field and save.
+     (Paste into the bookmark manager's URL box, NOT the address bar — Chrome
+     strips the leading "javascript:" if you paste there.)
+
+To use it:
+  1. Log in to asda.com.
+  2. Click the "ASDA token" bookmark. It copies your token to the clipboard.
+  3. Back here, run:  bun run cart
+
+The token lasts 30 minutes and is never stored.`);
 }
 
 if (import.meta.main) await main();

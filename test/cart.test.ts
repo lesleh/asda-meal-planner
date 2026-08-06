@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readIdentity } from "../src/cart";
+import { BOOKMARKLET, readIdentity } from "../src/cart";
 
 // Minimal unsigned JWTs; the code only reads claims, never verifies them.
 const jwt = (payload: Record<string, unknown>): string => {
@@ -31,5 +31,15 @@ describe("readIdentity", () => {
   test("surfaces expiry so an old token is rejected before any network call", () => {
     const token = jwt({ sty: "User", isb: "rcid:X", exp: Math.floor(Date.now() / 1000) - 60 });
     expect(readIdentity(token).expiresAt).toBeLessThan(Date.now());
+  });
+});
+
+describe("bookmarklet", () => {
+  test("is a javascript: bookmarklet that reads the token cookie and copies it", () => {
+    expect(BOOKMARKLET.startsWith("javascript:")).toBe(true);
+    expect(BOOKMARKLET).toContain("SLAS\\.AUTH_TOKEN");
+    expect(BOOKMARKLET).toContain("clipboard.writeText");
+    // decodeURIComponent turns the stored "Bearer%20eyJ..." back into a usable header.
+    expect(BOOKMARKLET).toContain("decodeURIComponent");
   });
 });

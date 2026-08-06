@@ -12,7 +12,8 @@
     "test": "bun test",
     "check-types": "tsc --noEmit",
     "rate": "bun run src/rate.ts",
-    "cart": "bun run src/cart.ts"
+    "cart": "bun run src/cart.ts",
+    "cart:setup": "bun run src/cart.ts --bookmarklet"
   },
   "devDependencies": {
     "@types/bun": "latest",
