@@ -202,7 +202,14 @@ function extractJson(text: string): string {
   return body.slice(start, end + 1);
 }
 
-async function ask(prompt: string): Promise<Recipe[]> {
+/**
+ * A model call takes 3-4 minutes and there are up to three of them, so say
+ * what is happening before blocking rather than only after. A silent minute
+ * is indistinguishable from a hang.
+ */
+async function ask(prompt: string, label: string): Promise<Recipe[]> {
+  const started = Date.now();
+  process.stdout.write(`  ${label}: asking ${MODEL} (${(prompt.length / 1000).toFixed(1)}k chars)... `);
   const proc = Bun.spawn(["claude", "-p", prompt, "--model", MODEL, "--output-format", "text"], {
     stdout: "pipe", stderr: "pipe", cwd: "/tmp",
   });
@@ -211,6 +218,7 @@ async function ask(prompt: string): Promise<Recipe[]> {
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
+  console.log(`${((Date.now() - started) / 1000).toFixed(0)}s`);
   if (code !== 0) throw new Error(`claude exited ${code}: ${err.slice(0, 300)}`);
   return JSON.parse(extractJson(out)) as Recipe[];
 }
@@ -252,6 +260,11 @@ if (import.meta.main) {
     console.log(`carried from last week: ${carried.map((c) => `${c.quantity}${c.unit} ${c.term}`).join(", ")}\n`);
   }
 
+  // Measured, not guessed: 170-260s per call, and the revision prompt is
+  // longer than the first so later attempts are slower.
+  console.log(`up to ${MAX_ATTEMPTS} model calls at roughly 3-4 minutes each; expect 3-12 minutes\n`);
+  const runStarted = Date.now();
+
   const history = loadHistory();
   const avoid = toAvoid(history);
   const liked = favourites(history);
@@ -273,7 +286,7 @@ if (import.meta.main) {
     | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const recipes = await ask(prompt);
+    const recipes = await ask(prompt, `attempt ${attempt}/${MAX_ATTEMPTS}`);
     const lines = applyPantry(costPlan(db, runId, recipes, carryOver));
     const gross = lines.reduce((n, l) => n + l.cost, 0);
     const basket = priceBasket(toBasket(lines), rules);
@@ -411,7 +424,8 @@ if (import.meta.main) {
     console.log(`\n  warnings:`);
     for (const warning of warnings) console.log(`    ${warning}`);
   }
-  console.log(`\n  written: ${PLAN_MD_PATH}`);
+  console.log(`\n  took ${((Date.now() - runStarted) / 1000 / 60).toFixed(1)} minutes`);
+  console.log(`  written: ${PLAN_MD_PATH}`);
   console.log(`           ${HISTORY_PATH}`);
   console.log(`           ${PLAN_PATH}`);
   db.close();

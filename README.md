@@ -30,7 +30,9 @@ bun run plan         # generate and cost a meal plan
 | ----------------------- | ------------------------------------------------------------------------------------------ |
 | `bun run snapshot`      | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run |
 | `bun run snapshot:diff` | Diff the two most recent runs without fetching                                             |
-| `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals          |
+| `bun run plan [meals]`  | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals. Takes 3-12 minutes |
+| `bun run rate`          | List everything cooked so far, with repeat counts and cost per person                      |
+| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions      |
 | `bun run search <term>` | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`           |
 | `bun test`              | Unit tests for pack parsing and ingredient resolution                                      |
 | `bun run check-types`   | `tsc --noEmit`                                                                             |
@@ -100,6 +102,27 @@ so it does not trigger the waste-revision loop, and it carries to next week.
 
 Plans also report near misses, such as "Any 3 for £12: 2 more packs for £7.62, worth
 £8.76", so a judgement call stays with you.
+
+## Recipe history
+
+Without memory the planner has no reason to vary: identical inputs produce the same
+dishes, and five consecutive development runs all produced a chicken curry. Every plan
+is now recorded in `data/history.json`, and the prompt is told what was cooked in the
+last six weeks so it avoids repeating them.
+
+Rate a meal and the history starts working for you. Anything marked `loved` or `liked`
+is offered back to the model as a candidate, overriding the variety rule. Anything
+marked `no` is excluded permanently, not just for six weeks, because a meal nobody ate
+should not return simply because time has passed.
+
+```bash
+bun run rate                              # what have we had?
+bun run rate "Chicken Fajitas" loved      # do that one again
+bun run rate "Liver and Onions" no        # never again
+```
+
+History is tracked in git, unlike the rest of `data/`. The snapshot rebuilds in three
+seconds; a year of "the children actually ate this" does not.
 
 ## Leftovers
 
