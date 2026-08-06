@@ -41,6 +41,16 @@ export const ADULT_EQUIVALENT =
 /** ASDA store to price against. Governs stock and shelf availability. */
 export const STORE_ID = "4618";
 
+/** Whether the household will freeze surplus fresh meat and fish. */
+export const WILL_FREEZE = true;
+
+/**
+ * Minimum improvement in effective unit price before a multibuy is worth
+ * stockpiling for. A 5% saving does not justify tying up cash and freezer
+ * space in three packs when one would do.
+ */
+export const MIN_STOCKPILE_SAVING = 0.15;
+
 /**
  * Assumed already in the cupboard, so not costed. Matched on the recipe's
  * search term, to stop a plan buying a litre of oil to use 45ml of it.

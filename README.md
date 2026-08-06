@@ -71,6 +71,30 @@ Warnings call out ingredients that matched no product, since those silently drop
 the shopping list and understate the total, plus malformed model output such as two
 ingredients in one search term.
 
+## Multibuy promotions
+
+ASDA encodes the mechanic in the promotion's name, so "Any 3 for £12" is parsed
+rather than looked up. Two mechanics are supported, fixed-price and cheapest-free,
+covering 84% of promoted products. Meal-deal style promotions are deliberately left
+unpriced: they are pick-one-from-each-group constructs whose structure is not in the
+data, and guessing would price three sandwiches as a meal deal.
+
+Pricing happens at the basket rather than the line, because groups are mix-and-match:
+three different products in one "Any 3 for £12" group trigger it together. Packs are
+taken dearest-first so the discount lands where it is worth most.
+
+The planner will buy up to a multibuy threshold, but only when two guards pass. The
+surplus must be worth storing (ambient, frozen, or fresh protein if `WILL_FREEZE`),
+which stops it buying 2kg of fresh chicken for a household that eats 700g a week. And
+the effective unit price must improve by at least `MIN_STOCKPILE_SAVING`, because a 5%
+saving does not justify tying up cash and freezer space.
+
+Deliberate surplus is tracked separately from leftovers. It is inventory, not waste,
+so it does not trigger the waste-revision loop, and it carries to next week.
+
+Plans also report near misses, such as "Any 3 for £12: 2 more packs for £7.62, worth
+£8.76", so a judgement call stays with you.
+
 ## Leftovers
 
 Supermarket pack sizes do not match recipe quantities, so a plan that buys 2kg of
@@ -108,10 +132,11 @@ Note that the Salesforce API is reached at its origin host rather than through
 
 ## Known limitations
 
-- **Multibuy promotions are not priced.** "Any 3 for £5" is recorded per product but
-  the basket is costed at single-item prices. In practice this costs nothing today,
-  because a plan buying one of a "buy 4" group gets no discount either way. It
-  matters once the planner is allowed to buy extra deliberately to hit a threshold.
+- **Nothing steers the plan towards multibuy groups.** Promotions are priced correctly
+  once products are chosen, but the model picks search terms and the resolver picks the
+  cheapest match, so a qualifying group is only ever hit by luck. Preferring a
+  multibuy member among near-equal candidates would be the next improvement.
+- **Meal-deal promotions are not priced**, so their totals are overestimates.
 - **Some units cannot be reconciled.** A recipe wanting "2 onions" against a 1kg bag
   has no per-item weight anywhere in the data. Those lines are flagged rather than
   guessed, and priced as a single pack.

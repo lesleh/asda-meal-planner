@@ -8,6 +8,7 @@
 
 import type { CarryOverItem } from "./leftovers";
 import type { Line, Recipe } from "./plan";
+import type { BasketPricing } from "./multibuy";
 
 export interface CostedIngredient {
   term: string;
@@ -56,6 +57,7 @@ export interface PlanArtifact {
   carriedIn: CarryOverItem[];
   carriedOut: CarryOverItem[];
   warnings: string[];
+  multibuy: BasketPricing;
 }
 
 export interface BuildArtifactInput {
@@ -69,6 +71,7 @@ export interface BuildArtifactInput {
   carriedIn: CarryOverItem[];
   carriedOut: CarryOverItem[];
   warnings: string[];
+  multibuy: BasketPricing;
   now?: Date;
 }
 
@@ -124,7 +127,7 @@ export function buildArtifact(input: BuildArtifactInput): PlanArtifact {
       unit: line.unit,
     }));
 
-  const cost = lines.reduce((sum, line) => sum + line.cost, 0);
+  const cost = lines.reduce((sum, line) => sum + line.cost, 0) - input.multibuy.saving;
 
   return {
     generatedAt: now.toISOString(),
@@ -146,6 +149,7 @@ export function buildArtifact(input: BuildArtifactInput): PlanArtifact {
     carriedIn: input.carriedIn,
     carriedOut: input.carriedOut,
     warnings: input.warnings,
+    multibuy: input.multibuy,
   };
 }
 
@@ -184,6 +188,24 @@ export function renderMarkdown(plan: PlanArtifact): string {
   }
   out.push(`| | **Total** | | **${money(plan.totals.cost)}** | |`);
   out.push("");
+
+  if (plan.multibuy.saving > 0) {
+    out.push(`Multibuy promotions took ${money(plan.multibuy.saving)} off this shop:`);
+    out.push("");
+    for (const promo of plan.multibuy.applied) {
+      out.push(`- ${promo.promoName} on ${promo.qualifying} packs, saving ${money(promo.saving)}`);
+    }
+    out.push("");
+  }
+
+  if (plan.multibuy.nearMisses.length > 0) {
+    out.push("Worth knowing: a few more packs would trigger further offers.");
+    out.push("");
+    for (const miss of plan.multibuy.nearMisses.slice(0, 5)) {
+      out.push(`- ${miss.promoName}: ${miss.need} more pack(s) for ${money(miss.extraCost)}, worth ${money(miss.extraValue)}`);
+    }
+    out.push("");
+  }
 
   if (plan.totals.preferencePremium > 0) {
     out.push(

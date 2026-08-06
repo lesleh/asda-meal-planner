@@ -14,6 +14,7 @@ import { costPlan, type Line, type Recipe } from "./plan";
 import { buildArtifact, renderMarkdown } from "./report";
 import { validateRecipes, validateResolution } from "./validate";
 import { preferenceLines } from "./preferences";
+import { loadRules, priceBasket, type BasketItem } from "./multibuy";
 import {
   carryOverIndex, computeWaste, loadCarryOver, saveCarryOver,
 } from "./leftovers";
@@ -197,6 +198,19 @@ async function ask(prompt: string): Promise<Recipe[]> {
   return JSON.parse(extractJson(out)) as Recipe[];
 }
 
+/** Purchased packs, as the multibuy pricer wants them. */
+function toBasket(lines: Line[]): BasketItem[] {
+  return lines
+    .filter((line) => line.product && line.cost > 0 && line.packs > 0)
+    .map((line) => ({
+      cin: line.product!.cin,
+      name: line.product!.name,
+      packs: line.packs,
+      price: line.product!.price,
+      promoIds: line.promoIds,
+    }));
+}
+
 /** Pantry items are consumed but not bought, so they cost nothing. */
 function applyPantry(lines: Line[]): Line[] {
   return lines.map((line) =>
@@ -227,12 +241,20 @@ if (import.meta.main) {
     carried.map((c) => `- ${c.quantity}${c.unit} ${c.term}`),
   );
   let prompt = basePrompt;
-  let best: { recipes: Recipe[]; lines: Line[]; total: number; waste: number; score: number } | undefined;
+  const rules = loadRules(db, runId);
+  let best:
+    | { recipes: Recipe[]; lines: Line[]; total: number; waste: number; score: number;
+        basket: ReturnType<typeof priceBasket> }
+    | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const recipes = await ask(prompt);
     const lines = applyPantry(costPlan(db, runId, recipes, carryOver));
-    const total = lines.reduce((n, l) => n + l.cost, 0);
+    const gross = lines.reduce((n, l) => n + l.cost, 0);
+    const basket = priceBasket(toBasket(lines), rules);
+    // Multibuys are priced across the whole basket, so the discount lands
+    // here rather than on any single line.
+    const total = Math.round((gross - basket.saving) * 100) / 100;
     const waste = computeWaste(lines).total;
     // Waste is already inside `total`; counting it again breaks ties towards
     // the plan that actually eats what it buys.
@@ -245,7 +267,7 @@ if (import.meta.main) {
       `£${waste.toFixed(2)} wasted (${total > 0 ? ((waste / total) * 100).toFixed(0) : 0}%) — ${recipes.map((r) => r.name).join("; ")}`,
     );
 
-    if (!best || score < best.score) best = { recipes, lines, total, waste, score };
+    if (!best || score < best.score) best = { recipes, lines, total, waste, score, basket };
     if (!overBudget && !tooWasteful) break;
     if (attempt < MAX_ATTEMPTS) prompt = buildRevisionPrompt(basePrompt, recipes, lines, meals);
   }
@@ -285,11 +307,13 @@ if (import.meta.main) {
   // Persist what the plan doesn't cook, so next week can spend it.
   const kept = saveCarryOver(
     best.lines
-      .filter((l) => l.leftover > 0 && !l.staple)
+      // Stockpiled surplus is excluded from waste but must still be recorded,
+      // or food that was deliberately bought quietly disappears.
+      .filter((l) => l.leftover + l.stockpiled > 0 && !l.staple)
       .map((l) => ({
         term: l.term,
         unit: l.unit,
-        quantity: l.leftover,
+        quantity: l.leftover + l.stockpiled,
         department: l.department,
         carriedOnly: l.packs === 0,
         previousExpiry: carried.find((c) => c.term === l.term && c.unit === l.unit)?.expiresAt,
@@ -306,6 +330,7 @@ if (import.meta.main) {
     household: { adults: HOUSEHOLD.adults, children: HOUSEHOLD.children, people: PEOPLE },
     budget: { perPortion: HOUSEHOLD.budgetPerPortion, total: budget, portions: PEOPLE * meals },
     waste: best.waste,
+    multibuy: best.basket,
     carriedIn: carried,
     carriedOut: kept,
     warnings,
@@ -315,6 +340,19 @@ if (import.meta.main) {
 
   const cupboard = best.lines.filter((l) => l.staple).map((l) => l.term);
   console.log(`\n  from your cupboard (not bought): ${cupboard.join(", ") || "none"}`);
+  if (best.basket.saving > 0) {
+    console.log(`  multibuys saved ${money(best.basket.saving)}:`);
+    for (const promo of best.basket.applied) {
+      console.log(`    ${promo.promoName} on ${promo.qualifying} packs, -${money(promo.saving)}`);
+    }
+  }
+  if (best.basket.nearMisses.length > 0) {
+    console.log(`  one more pack would trigger:`);
+    for (const miss of best.basket.nearMisses.slice(0, 4)) {
+      console.log(`    ${miss.promoName}: ${miss.need} more for ${money(miss.extraCost)}, worth ${money(miss.extraValue)}`);
+    }
+  }
+
   const premium = best.lines.reduce((sum, l) => sum + l.preferencePremium, 0);
   if (premium > 0) {
     const byPref = best.lines.filter((l) => l.preferencePremium > 0);

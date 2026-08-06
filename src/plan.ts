@@ -11,6 +11,8 @@
 import { Database } from "bun:sqlite";
 import { type Candidate, latestRun, resolveIngredient } from "./ingredients";
 import { carryOverKey } from "./leftovers";
+import { MIN_STOCKPILE_SAVING, WILL_FREEZE } from "./config";
+import { isStockpilable, loadRules, promoIdsFor } from "./multibuy";
 import { DB_PATH } from "./config";
 
 
@@ -57,6 +59,14 @@ export interface Line {
   preferencePremium: number;
   /** Preference responsible for that premium. */
   preferenceId?: string;
+  /** Promotions the chosen product belongs to, for basket-level pricing. */
+  promoIds: string[];
+  /**
+   * Surplus bought deliberately to trigger a multibuy. Kept apart from
+   * `leftover` because it is inventory, not waste, and must not drive the
+   * planner's waste-revision loop.
+   */
+  stockpiled: number;
   note?: string;
 }
 
@@ -122,6 +132,7 @@ export function costPlan(
   }
 
   const available = new Map(carryOver);
+  const rules = loadRules(db, runId);
   const lines: Line[] = [];
 
   for (const [key, entry] of demand) {
@@ -157,7 +168,7 @@ export function costPlan(
     if (!product) {
       lines.push({ term, unit: entry.unit, needed: entry.total, fromCarryOver,
         usedBy: entry.usedBy, staple: entry.staple, product: undefined,
-        packs: 0, bought: 0, leftover: 0, cost: 0, preferencePremium: 0,
+        packs: 0, bought: 0, leftover: 0, cost: 0, preferencePremium: 0, promoIds: [], stockpiled: 0,
         note: resolved.rejected.length > 0
           ? `no match — ${resolved.rejected.length} candidate(s) ruled out by a preference`
           : "no match" });
@@ -173,7 +184,31 @@ export function costPlan(
     const supplies = packSupplies(product, entry.unit);
     const unitsAgree = supplies !== undefined;
     // Carry-over may already cover the whole line, in which case buy nothing.
-    const packs = unitsAgree ? Math.ceil(toBuy / supplies) : toBuy > 0 ? 1 : 0;
+    const minPacks = unitsAgree ? Math.ceil(toBuy / supplies) : toBuy > 0 ? 1 : 0;
+
+    // Consider buying up to a multibuy threshold. Approximate: assume this
+    // product fills the group alone, since mix-and-match across lines can
+    // only be settled at the basket, which happens later.
+    let packs = minPacks;
+    let stockpiled = 0;
+    if (minPacks > 0 && unitsAgree) {
+      for (const promoId of promoIdsFor(db, runId, product.cin)) {
+        const rule = rules.get(promoId);
+        if (!rule || rule.mechanic.kind !== "fixed-price") continue;
+        const { count, price } = rule.mechanic;
+        if (minPacks >= count) continue;
+        if (!isStockpilable(product.department ?? undefined, WILL_FREEZE)) continue;
+
+        const nowPerPack = product.price;
+        const thenPerPack = price / count;
+        if ((nowPerPack - thenPerPack) / nowPerPack < MIN_STOCKPILE_SAVING) continue;
+
+        packs = count;
+        stockpiled = (count - minPacks) * supplies;
+        break;
+      }
+    }
+
     const bought = unitsAgree ? packs * supplies : 0;
 
     lines.push({
@@ -187,8 +222,11 @@ export function costPlan(
       product,
       packs,
       bought,
-      leftover: unitsAgree ? bought + fromCarryOver - entry.total : 0,
+      // Deliberate surplus is excluded: it is inventory, not waste.
+      leftover: unitsAgree ? bought + fromCarryOver - entry.total - stockpiled : 0,
+      stockpiled,
       cost: Math.round(packs * product.price * 100) / 100,
+      promoIds: promoIdsFor(db, runId, product.cin),
       ...(() => {
         if (!cheapestRejected || !unitsAgree) return { preferencePremium: 0 };
         const alt = cheapestRejected.candidate;
