@@ -11,7 +11,7 @@
 import { Database } from "bun:sqlite";
 import { latestRun } from "./ingredients";
 import { costPlan, type Recipe } from "./plan";
-import { DB_PATH, PLAN_PATH, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
+import { DB_PATH, PLAN_PATH, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;
@@ -184,6 +184,7 @@ if (import.meta.main) {
   }
 
   if (!best) throw new Error("no plan produced");
+  ensureDataDir();
   await Bun.write(PLAN_PATH, JSON.stringify(best.recipes, null, 2));
 
   const money = (n: number) => `£${n.toFixed(2)}`;

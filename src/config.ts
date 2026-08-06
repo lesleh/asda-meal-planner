@@ -1,11 +1,21 @@
 /** Project-wide configuration and filesystem layout. */
 
+import { mkdirSync } from "node:fs";
+
 const ROOT = new URL("../", import.meta.url).pathname;
 
 /** Snapshot database. Gitignored: it is rebuilt by `bun run snapshot`. */
 export const DB_PATH = `${ROOT}data/snapshot.db`;
 /** Most recent generated meal plan. */
 export const PLAN_PATH = `${ROOT}data/plan.json`;
+
+/**
+ * Create `data/` if it is missing. It is gitignored in full, so a fresh clone
+ * has no such directory and the first snapshot would otherwise fail.
+ */
+export function ensureDataDir(): void {
+  mkdirSync(`${ROOT}data`, { recursive: true });
+}
 
 export const HOUSEHOLD = {
   adults: 2,
