@@ -17,6 +17,7 @@ export interface SnackPick {
   cin: string;
   name: string;
   department: string | null;
+  shelf: string | null;
   packs: number;
   price: number;
   cost: number;
@@ -72,6 +73,7 @@ const DRINK = new RegExp(
     "energy.*drink|sports.*drink|health.*drink|soft drink",
     "milk drink|milkshake|yogurt drink|drinking yogurt",
     "lunchbox drink|kids.*drink",
+    "\\bdrink\\b", // catches bare "... Flavoured Drink" names
     "coffee|\\btea\\b",
   ].join("|"),
   "i",
@@ -83,14 +85,18 @@ const isDrink = (department: string | null, shelf: string | null, name: string):
 /**
  * Pick snacks to fill the cart up to `targetSpend`.
  *
- * Ranked by discount then unit price, so the best-value real reductions go in
- * first. One pack of each: variety over a pallet of one thing.
+ * Order is weighted-random, not a fixed ranking: better discounts are more
+ * likely to come first, but the selection varies run to run so you aren't shown
+ * the same snacks every time. The blocklist is what removes things for good;
+ * this just stops the acceptable pool from being frozen.
  */
 export function selectSnacks(
   db: Database,
   runId: number,
   options: SnackOptions,
   alreadySpent: number,
+  /** Randomness source, injectable so tests can be deterministic. */
+  random: () => number = Math.random,
 ): SnackPick[] {
   const { targetSpend, maxSpend, exclude = new Set(), maxItems = 20, maxPerDepartment = 3 } = options;
   const perDept = new Map<string, number>();
@@ -102,8 +108,7 @@ export function selectSnacks(
       FROM products
       WHERE run_id = ?
         AND on_offer = 1
-        AND price IS NOT NULL
-      ORDER BY COALESCE(discount_pct, 0) DESC, price_per_uom`)
+        AND price IS NOT NULL`)
     .all(runId);
 
   const candidates = rows.filter((row) => {
@@ -118,6 +123,16 @@ export function selectSnacks(
     if (rejectionFor({ name: row.name, shelf: row.shelf }, PREFERENCES)) return false;
     return true;
   });
+
+  // Weighted-random shuffle (Efraimidis-Spirakis): key = random^(1/weight),
+  // sorted descending. A deeper discount raises the weight, so good deals tend
+  // to surface first without the order ever being fixed.
+  candidates
+    .map((row) => ({ row, key: random() ** (1 / Math.max(5, row.discount_pct ?? 0)) }))
+    .sort((a, b) => b.key - a.key)
+    .forEach(({ row }, i) => {
+      candidates[i] = row;
+    });
 
   const picks: SnackPick[] = [];
   let snackSpend = 0;
@@ -136,6 +151,7 @@ export function selectSnacks(
       cin: row.cin,
       name: row.name,
       department: row.department,
+      shelf: row.shelf,
       packs: 1,
       price: row.price,
       cost: row.price,
