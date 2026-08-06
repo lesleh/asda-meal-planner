@@ -12,6 +12,7 @@
 
 import { Database } from "bun:sqlite";
 import { DB_PATH } from "./config";
+import { rejectionFor } from "./preferences";
 
 
 export interface Candidate {
@@ -45,6 +46,12 @@ export interface ResolvedIngredient {
   bestOnOffer: Candidate | undefined;
   candidates: Candidate[];
   /**
+   * Candidates a household preference removed, cheapest first. Empty when no
+   * preference applied. Retained so the cost of a preference can be reported
+   * rather than silently absorbed.
+   */
+  rejected: { candidate: Candidate; preferenceId: string }[];
+  /**
    * Other shelves that scored as well or nearly as well. Non-empty means the
    * taxonomy alone can't decide — "potatoes" scores `White Potatoes` and
    * `Sweet Potatoes` identically — and the caller should pick using knowledge
@@ -54,6 +61,8 @@ export interface ResolvedIngredient {
 }
 
 export interface ResolveOptions {
+  /** Skip household preference filtering. Off by default. */
+  ignorePreferences?: boolean;
   /** Only consider products flagged as on offer. */
   onOfferOnly?: boolean;
   /** Restrict to a shelf directly, skipping the disambiguation heuristic. */
@@ -191,19 +200,21 @@ export function resolveIngredient(
     ? options
     : { ...options, shelf: TERM_SHELF_HINTS[term.trim().toLowerCase()] };
   const { onOfferOnly = false, limit = 8 } = options;
+  const diet = new Set(options.diet ?? []);
 
-  const dietClause = (options.diet ?? [])
-    .map((constraint) =>
-      constraint === "vegan"
-        ? "AND p.vegan = 1"
-        : constraint === "vegetarian"
-          ? "AND p.vegetarian = 1"
-          : "AND p.no_gluten = 1",
-    )
-    .join(" ");
-
+  // One statement text and one parameter set on every call, always. Building
+  // the SQL conditionally produced a different prepared statement per option
+  // combination while still passing every parameter, and intermittently
+  // returned no rows for ingredients that plainly exist. Filters are
+  // expressed as no-op comparisons instead so the query never varies.
   const rows = db
-    .query<Row, { $run: number; $match: string; $shelf: string | null }>(`
+    .query<
+      Row,
+      {
+        $run: number; $match: string; $shelf: string | null;
+        $onOfferOnly: number; $vegan: number; $vegetarian: number; $glutenFree: number;
+      }
+    >(`
       SELECT p.cin, p.name, p.shelf, p.department, p.price, p.was_price,
              p.discount_pct, p.pack_quantity, p.pack_unit, p.price_per_uom,
              p.uom, p.on_offer, p.vegan, p.vegetarian, p.no_gluten,
@@ -212,15 +223,25 @@ export function resolveIngredient(
       JOIN products p ON p.cin = product_search.cin AND p.run_id = product_search.run_id
       WHERE product_search MATCH $match
         AND product_search.run_id = $run
-        ${onOfferOnly ? "AND p.on_offer = 1" : ""}
-        ${options.shelf ? "AND p.shelf = $shelf" : ""}
-        ${dietClause}
+        AND ($onOfferOnly = 0 OR p.on_offer = 1)
+        AND ($shelf IS NULL OR p.shelf = $shelf)
+        AND ($vegan = 0 OR p.vegan = 1)
+        AND ($vegetarian = 0 OR p.vegetarian = 1)
+        AND ($glutenFree = 0 OR p.no_gluten = 1)
       ORDER BY rank
       LIMIT 400`)
-    .all({ $run: runId, $match: toMatchExpression(term), $shelf: options.shelf ?? null });
+    .all({
+      $run: runId,
+      $match: toMatchExpression(term),
+      $shelf: options.shelf ?? null,
+      $onOfferOnly: onOfferOnly ? 1 : 0,
+      $vegan: diet.has("vegan") ? 1 : 0,
+      $vegetarian: diet.has("vegetarian") ? 1 : 0,
+      $glutenFree: diet.has("gluten-free") ? 1 : 0,
+    });
 
   if (rows.length === 0) {
-    return { term, shelf: null, reason: "no-matches", best: undefined, bestOnOffer: undefined, candidates: [], alternativeShelves: [] };
+    return { term, shelf: null, reason: "no-matches", best: undefined, bestOnOffer: undefined, candidates: [], rejected: [], alternativeShelves: [] };
   }
 
   const all = rows.map(toCandidate);
@@ -282,10 +303,25 @@ export function resolveIngredient(
     for (const token of termTokens) if (nameTokens.has(token)) matched++;
     return matched;
   };
-  const fullMatches = onShelf.filter((c) => nameOverlap(c) === termTokens.size);
-  const anyMatches = onShelf.filter((c) => nameOverlap(c) > 0);
+  // Household preferences are applied after the shelf is chosen, so a
+  // rejected product still counts as evidence for which shelf is right.
+  const rejected: { candidate: Candidate; preferenceId: string }[] = [];
+  const permitted = options.ignorePreferences
+    ? onShelf
+    : onShelf.filter((candidate) => {
+        const rejection = rejectionFor(candidate);
+        if (rejection) {
+          rejected.push({ candidate, preferenceId: rejection.preferenceId });
+          return false;
+        }
+        return true;
+      });
+  rejected.sort((a, b) => (a.candidate.pricePerUom ?? Infinity) - (b.candidate.pricePerUom ?? Infinity));
+
+  const fullMatches = permitted.filter((c) => nameOverlap(c) === termTokens.size);
+  const anyMatches = permitted.filter((c) => nameOverlap(c) > 0);
   const scoped =
-    fullMatches.length > 0 ? fullMatches : anyMatches.length > 0 ? anyMatches : onShelf;
+    fullMatches.length > 0 ? fullMatches : anyMatches.length > 0 ? anyMatches : permitted;
 
   // Rank by unit price, but only within the dominant unit — £/KG and £/EA
   // aren't comparable, and mixing them makes a bag of onions look worse than
@@ -311,6 +347,7 @@ export function resolveIngredient(
     best,
     bestOnOffer: bestOnOffer && bestOnOffer.cin !== best?.cin ? bestOnOffer : undefined,
     candidates: ranked.slice(0, limit),
+    rejected,
     alternativeShelves,
   };
 }

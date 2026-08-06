@@ -61,3 +61,32 @@ describe("resolveIngredient", () => {
     expect(result.best).toBeUndefined();
   });
 });
+
+describe("query invariance", () => {
+  // The resolver's SQL used to be assembled conditionally, so each option
+  // combination produced a different prepared statement. Repeated and varied
+  // calls must give identical results for the same inputs.
+  test("repeated identical calls return identical results", () => {
+    const runs = Array.from({ length: 20 }, () => resolveIngredient(db, runId, "onion").best?.cin);
+    expect(new Set(runs).size).toBe(1);
+    expect(runs[0]).toBeDefined();
+  });
+
+  test("interleaving option combinations does not disturb the plain call", () => {
+    const baseline = resolveIngredient(db, runId, "garden peas").best?.cin;
+    expect(baseline).toBeDefined();
+    for (let i = 0; i < 10; i++) {
+      resolveIngredient(db, runId, "garden peas", { onOfferOnly: true });
+      resolveIngredient(db, runId, "garden peas", { shelf: "Frozen Peas" });
+      resolveIngredient(db, runId, "garden peas", { diet: ["vegan"] });
+      resolveIngredient(db, runId, "garden peas", { ignorePreferences: true });
+      expect(resolveIngredient(db, runId, "garden peas").best?.cin).toBe(baseline);
+    }
+  });
+
+  test("common ingredients always resolve", () => {
+    for (const term of ["onion", "garden peas", "fusilli", "potatoes", "milk", "chicken breast"]) {
+      expect(resolveIngredient(db, runId, term).best).toBeDefined();
+    }
+  });
+});
