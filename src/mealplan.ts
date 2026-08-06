@@ -13,6 +13,7 @@ import { latestRun } from "./ingredients";
 import { costPlan, type Line, type Recipe } from "./plan";
 import { buildArtifact, renderMarkdown } from "./report";
 import { validateRecipes, validateResolution } from "./validate";
+import { preferenceLines } from "./preferences";
 import {
   carryOverIndex, computeWaste, loadCarryOver, saveCarryOver,
 } from "./leftovers";
@@ -84,6 +85,9 @@ ${carriedSection}
 
 PROMOTED INGREDIENTS (cheapest per unit first):
 ${lines.join("\n")}
+
+HOUSEHOLD PREFERENCES — these are hard constraints, not suggestions:
+${preferenceLines().join("\n")}
 
 Rules:
 - Value beats discount. A promoted premium product at £15/kg is worse than an
@@ -311,6 +315,12 @@ if (import.meta.main) {
 
   const cupboard = best.lines.filter((l) => l.staple).map((l) => l.term);
   console.log(`\n  from your cupboard (not bought): ${cupboard.join(", ") || "none"}`);
+  const premium = best.lines.reduce((sum, l) => sum + l.preferencePremium, 0);
+  if (premium > 0) {
+    const byPref = best.lines.filter((l) => l.preferencePremium > 0);
+    console.log(`  preferences cost ${money(premium)} extra: ${byPref.map((l) => `${l.term} +${money(l.preferencePremium)}`).join(", ")}`);
+  }
+
   const usedCarryOver = best.lines.filter((l) => l.fromCarryOver > 0);
   if (usedCarryOver.length) {
     console.log(`  used from last week's leftovers: ${usedCarryOver.map((l) => `${l.fromCarryOver}${l.unit} ${l.term}`).join(", ")}`);

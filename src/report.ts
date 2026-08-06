@@ -49,7 +49,7 @@ export interface PlanArtifact {
   storeId: string;
   household: { adults: number; children: number; people: number };
   budget: { perPortion: number; total: number; portions: number };
-  totals: { cost: number; waste: number; costPerPortion: number; onOfferLines: number };
+  totals: { cost: number; waste: number; costPerPortion: number; onOfferLines: number; preferencePremium: number };
   recipes: CostedRecipe[];
   shoppingList: ShoppingItem[];
   cupboard: string[];
@@ -137,6 +137,8 @@ export function buildArtifact(input: BuildArtifactInput): PlanArtifact {
       waste: Math.round(input.waste * 100) / 100,
       costPerPortion: Math.round((cost / Math.max(1, input.budget.portions)) * 100) / 100,
       onOfferLines: shoppingList.filter((item) => item.onOffer).length,
+      preferencePremium:
+        Math.round(input.lines.reduce((sum, line) => sum + line.preferencePremium, 0) * 100) / 100,
     },
     recipes: costedRecipes,
     shoppingList,
@@ -182,6 +184,14 @@ export function renderMarkdown(plan: PlanArtifact): string {
   }
   out.push(`| | **Total** | | **${money(plan.totals.cost)}** | |`);
   out.push("");
+
+  if (plan.totals.preferencePremium > 0) {
+    out.push(
+      `Household preferences added ${money(plan.totals.preferencePremium)} to this shop, ` +
+        `by ruling out cheaper products that don't suit.`,
+    );
+    out.push("");
+  }
 
   if (plan.cupboard.length > 0) {
     out.push(`From your cupboard, not bought: ${plan.cupboard.join(", ")}.`);

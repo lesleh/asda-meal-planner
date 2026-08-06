@@ -50,6 +50,13 @@ export interface Line {
   bought: number;
   leftover: number;
   cost: number;
+  /**
+   * Extra paid because a household preference ruled out something cheaper.
+   * Zero when no preference applied or the cheap option wasn't cheaper.
+   */
+  preferencePremium: number;
+  /** Preference responsible for that premium. */
+  preferenceId?: string;
   note?: string;
 }
 
@@ -150,9 +157,18 @@ export function costPlan(
     if (!product) {
       lines.push({ term, unit: entry.unit, needed: entry.total, fromCarryOver,
         usedBy: entry.usedBy, staple: entry.staple, product: undefined,
-        packs: 0, bought: 0, leftover: 0, cost: 0, note: "no match" });
+        packs: 0, bought: 0, leftover: 0, cost: 0, preferencePremium: 0,
+        note: resolved.rejected.length > 0
+          ? `no match — ${resolved.rejected.length} candidate(s) ruled out by a preference`
+          : "no match" });
       continue;
     }
+
+    // What the cheapest preference-rejected option would have cost, so the
+    // price of a preference is visible rather than absorbed into the total.
+    const cheapestRejected = resolved.rejected.find(
+      (r) => packSupplies(r.candidate, entry.unit) !== undefined,
+    );
 
     const supplies = packSupplies(product, entry.unit);
     const unitsAgree = supplies !== undefined;
@@ -173,6 +189,16 @@ export function costPlan(
       bought,
       leftover: unitsAgree ? bought + fromCarryOver - entry.total : 0,
       cost: Math.round(packs * product.price * 100) / 100,
+      ...(() => {
+        if (!cheapestRejected || !unitsAgree) return { preferencePremium: 0 };
+        const alt = cheapestRejected.candidate;
+        const altSupplies = packSupplies(alt, entry.unit)!;
+        const altCost = Math.ceil(toBuy / altSupplies) * alt.price;
+        const premium = Math.round((packs * product.price - altCost) * 100) / 100;
+        return premium > 0
+          ? { preferencePremium: premium, preferenceId: cheapestRejected.preferenceId }
+          : { preferencePremium: 0 };
+      })(),
       note: unitsAgree
         ? resolved.alternativeShelves.length > 0
           ? `ambiguous: also ${resolved.alternativeShelves.slice(0, 2).map((a) => a.shelf).join(", ")}`

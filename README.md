@@ -42,6 +42,21 @@ Everything tunable lives in `src/config.ts`.
 - `HOUSEHOLD` sets adults, children, the child portion fraction, and the per-portion budget
 - `PANTRY` lists ingredients assumed already owned, so a plan does not buy a litre of oil to use 45ml
 - `STORE_ID` selects the store that stock and pricing are scoped to
+- `PREFERENCES` in `src/preferences.ts` records household dislikes
+
+## Preferences
+
+A preference has to be enforced twice, and the second place is easy to miss. The
+model emits a search term ("chicken thighs"); the resolver picks the product.
+Telling the model "no bones" achieves nothing on its own, because the resolver will
+still return bone-in thighs as the cheapest match. So each preference carries both a
+description for the prompt and a pattern the resolver rejects candidates with.
+
+Rejected candidates are kept rather than discarded, so a plan can report what a
+preference costs. Avoiding bone-in chicken adds about £4 to a generic "chicken
+thighs" line, since bone-in is roughly £2.90/kg against £6.47/kg for boneless
+fillets. Note that bone-in is only 65-70% edible, so the real gap is narrower than
+the shelf price suggests.
 
 ## Output
 
