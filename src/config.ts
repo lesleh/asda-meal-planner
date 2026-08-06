@@ -47,18 +47,20 @@ export const ADULT_EQUIVALENT =
  * Shop budget.
  *
  * `deliveryMinimum` is a floor, not a ceiling: ASDA won't let you check out
- * below it, so a lean meal plan that comes to less is useless. The gap between
- * the meals and the floor is filled deliberately with snacks the children will
- * eat (see `src/snacks.ts`), rather than left short or padded with filler.
+ * below it, so a lean meal plan that comes to less is useless.
  *
- * `cap` is the real "we're spending too much" limit; the shop should land
- * between the floor and the cap. `maxSnackSpend` stops snacks alone ballooning
- * to reach the floor on an unusually cheap meal week.
+ * `snackAllowance` is a deliberate spend on snacks every shop, not just
+ * gap-filling. The children graze heavily, so snacks are a real line the plan
+ * always buys; the pass spends at least this, and more if the meals leave the
+ * cart short of the floor. `maxSnackSpend` is the absolute ceiling on it.
+ *
+ * `cap` is the real "we're spending too much" limit on the whole shop.
  */
 export const BUDGET = {
   deliveryMinimum: 40,
-  cap: 55,
-  maxSnackSpend: 15,
+  snackAllowance: 15,
+  maxSnackSpend: 22,
+  cap: 70,
 };
 
 /** ASDA store to price against. Governs stock and shelf availability. */

@@ -281,23 +281,25 @@ if (import.meta.main) {
 
   if (!best) throw new Error("no plan produced");
 
-  // Fill the gap between the meals and the delivery minimum with good-value
-  // snacks the children will eat. A deliberate line, not padding.
+  // Snacks are a deliberate line the children will graze through, not just
+  // gap-filler. Spend the allowance every shop, and more if the meals leave
+  // the cart short of the delivery minimum.
   const mealCost = best.total; // already net of the multibuy saving
   const inBasket = new Set(best.lines.filter((l) => l.product).map((l) => l.product!.cin));
-  const snacks =
-    mealCost < BUDGET.deliveryMinimum
-      ? selectSnacks(db, runId, {
-          targetSpend: BUDGET.deliveryMinimum,
-          maxSpend: BUDGET.maxSnackSpend,
-          exclude: inBasket,
-        }, mealCost)
-      : [];
+  const snackTargetCart = Math.max(
+    BUDGET.deliveryMinimum,
+    mealCost + BUDGET.snackAllowance,
+  );
+  const snacks = selectSnacks(db, runId, {
+    targetSpend: snackTargetCart,
+    maxSpend: BUDGET.maxSnackSpend,
+    exclude: inBasket,
+  }, mealCost);
   const snackCost = Math.round(snacks.reduce((n: number, s: SnackPick) => n + s.cost, 0) * 100) / 100;
   const shopTotal = Math.round((mealCost + snackCost) * 100) / 100;
 
   if (snacks.length) {
-    console.log(`\nsnacks to reach the £${BUDGET.deliveryMinimum} floor: +£${snackCost.toFixed(2)}`);
+    console.log(`\nsnack allowance (grazed, bought every shop): +£${snackCost.toFixed(2)}`);
     for (const s of snacks) console.log(`  £${s.cost.toFixed(2).padStart(5)}  -${s.discountPct}%  ${s.name}`);
   }
   if (shopTotal < BUDGET.deliveryMinimum) {

@@ -205,8 +205,9 @@ export function renderMarkdown(plan: PlanArtifact): string {
 
   if (plan.snacks.length > 0) {
     out.push(
-      `Snacks top the shop up to the £${plan.budget.deliveryMinimum} delivery minimum. ` +
-        `They are genuine reductions the children will get through quickly, not padding.`,
+      `A deliberate snack allowance, bought every shop: genuine reductions the ` +
+        `children graze through quickly. It also carries the cart over the ` +
+        `£${plan.budget.deliveryMinimum} delivery minimum.`,
     );
     out.push("");
   }

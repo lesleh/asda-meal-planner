@@ -42,3 +42,16 @@ describe("selectSnacks", () => {
     expect(second.map((p) => p.cin)).not.toContain(first[0]!.cin);
   });
 });
+
+describe("snack variety", () => {
+  test("caps how many come from any one department", () => {
+    const picks = selectSnacks(
+      db, latestRun(db),
+      { targetSpend: 60, maxSpend: 25, maxPerDepartment: 3 },
+      0,
+    );
+    const byDept = new Map<string, number>();
+    for (const p of picks) byDept.set(p.department ?? "?", (byDept.get(p.department ?? "?") ?? 0) + 1);
+    for (const n of byDept.values()) expect(n).toBeLessThanOrEqual(3);
+  });
+});

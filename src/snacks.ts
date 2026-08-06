@@ -47,6 +47,8 @@ export interface SnackOptions {
   exclude?: Set<string>;
   /** How many distinct snacks at most; a shop of 30 yoghurt tubs helps nobody. */
   maxItems?: number;
+  /** Cap per department, so the allowance isn't spent entirely on cake. */
+  maxPerDepartment?: number;
 }
 
 /**
@@ -68,7 +70,8 @@ export function selectSnacks(
   options: SnackOptions,
   alreadySpent: number,
 ): SnackPick[] {
-  const { targetSpend, maxSpend, exclude = new Set(), maxItems = 12 } = options;
+  const { targetSpend, maxSpend, exclude = new Set(), maxItems = 20, maxPerDepartment = 3 } = options;
+  const perDept = new Map<string, number>();
 
   const rows = db
     .query<Row, [number]>(`
@@ -100,6 +103,10 @@ export function selectSnacks(
     if (cart >= targetSpend) break;
     if (picks.length >= maxItems) break;
     if (snackSpend + row.price > maxSpend) continue; // try a cheaper one
+
+    const dept = row.department ?? "other";
+    if ((perDept.get(dept) ?? 0) >= maxPerDepartment) continue; // enough of these
+    perDept.set(dept, (perDept.get(dept) ?? 0) + 1);
 
     picks.push({
       cin: row.cin,
