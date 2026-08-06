@@ -7,3 +7,7 @@ data/*.db-wal
 
 # Generated meal plans.
 data/plan.json
+
+# Recipe history is the one thing here that cannot be regenerated, so it is
+# tracked rather than ignored.
+!data/history.json

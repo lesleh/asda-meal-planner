@@ -15,10 +15,11 @@ import { buildArtifact, renderMarkdown } from "./report";
 import { validateRecipes, validateResolution } from "./validate";
 import { preferenceLines } from "./preferences";
 import { loadRules, priceBasket, type BasketItem } from "./multibuy";
+import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "./history";
 import {
   carryOverIndex, computeWaste, loadCarryOver, saveCarryOver,
 } from "./leftovers";
-import { DB_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
+import { DB_PATH, HISTORY_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry } from "./config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;
@@ -59,8 +60,24 @@ function promotedIngredients(db: Database, runId: number, limit = 120): OfferRow
     .all(runId, ...COOKABLE_DEPARTMENTS, limit);
 }
 
-function buildPrompt(offers: OfferRow[], meals: number, carried: string[]): string {
+function buildPrompt(
+  offers: OfferRow[],
+  meals: number,
+  carried: string[],
+  avoid: { name: string; reason: string }[],
+  liked: { name: string; verdict?: string }[],
+): string {
   const budget = HOUSEHOLD.budgetPerPortion * PEOPLE * meals;
+  const avoidSection = avoid.length
+    ? `\nALREADY COOKED RECENTLY — do NOT repeat these, and avoid anything that is
+essentially the same dish under another name. Variety is the point:
+${avoid.map((a) => `- ${a.name} (${a.reason})`).join("\n")}\n`
+    : "";
+  const likedSection = liked.length
+    ? `\nMEALS THIS HOUSEHOLD LIKED — include one or two if they fit the budget and
+the promoted ingredients. These override the variety rule:
+${liked.map((l) => `- ${l.name}${l.verdict === "loved" ? " (a favourite)" : ""}`).join("\n")}\n`
+    : "";
   const carriedSection = carried.length
     ? `\nALREADY IN THE FRIDGE from last week — use these up first, they cost nothing:\n${carried.join("\n")}\n`
     : "";
@@ -82,7 +99,7 @@ Total for the whole shop: £${budget.toFixed(2)}. This is a hard ceiling.
 ALREADY IN THE CUPBOARD — use freely, they cost nothing and must still be listed
 with "staple": true:
 ${PANTRY.join(", ")}
-${carriedSection}
+${carriedSection}${avoidSection}${likedSection}
 
 PROMOTED INGREDIENTS (cheapest per unit first):
 ${lines.join("\n")}
@@ -235,10 +252,18 @@ if (import.meta.main) {
     console.log(`carried from last week: ${carried.map((c) => `${c.quantity}${c.unit} ${c.term}`).join(", ")}\n`);
   }
 
+  const history = loadHistory();
+  const avoid = toAvoid(history);
+  const liked = favourites(history);
+  if (avoid.length) console.log(`avoiding ${avoid.length} recently cooked meals`);
+  if (liked.length) console.log(`may bring back: ${liked.map((r) => r.name).join(", ")}`);
+
   const basePrompt = buildPrompt(
     promotedIngredients(db, runId),
     meals,
     carried.map((c) => `- ${c.quantity}${c.unit} ${c.term}`),
+    avoid,
+    liked,
   );
   let prompt = basePrompt;
   const rules = loadRules(db, runId);
@@ -322,6 +347,16 @@ if (import.meta.main) {
 
   const warnings = [...validateResolution(best.lines), ...validateRecipes(best.recipes)];
 
+  const perPerson = new Map<string, number>();
+  for (const recipe of best.recipes) {
+    const cost = recipe.ingredients.reduce((sum, ing) => {
+      const line = best!.lines.find((l) => l.term === ing.term && l.unit === ing.unit);
+      return sum + (line && line.needed > 0 ? (ing.quantity / line.needed) * line.cost : 0);
+    }, 0);
+    perPerson.set(recipe.name, Math.round((cost / Math.max(1, recipe.serves)) * 100) / 100);
+  }
+  saveHistory(recordPlan(history, best.recipes, perPerson));
+
   const artifact = buildArtifact({
     recipes: best.recipes,
     lines: best.lines,
@@ -377,6 +412,7 @@ if (import.meta.main) {
     for (const warning of warnings) console.log(`    ${warning}`);
   }
   console.log(`\n  written: ${PLAN_MD_PATH}`);
+  console.log(`           ${HISTORY_PATH}`);
   console.log(`           ${PLAN_PATH}`);
   db.close();
 }

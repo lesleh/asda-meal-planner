@@ -10,7 +10,8 @@
     "plan": "bun run src/mealplan.ts",
     "search": "bun run src/ingredients.ts",
     "test": "bun test",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "rate": "bun run src/rate.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

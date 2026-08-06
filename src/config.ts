@@ -12,6 +12,11 @@ export const PLAN_PATH = `${ROOT}data/plan.json`;
 export const PLAN_MD_PATH = `${ROOT}data/plan.md`;
 /** Directory holding all generated state. */
 export const DATA_DIR = `${ROOT}data`;
+/**
+ * Recipe history. The only state here that cannot be regenerated, so it is
+ * tracked in git rather than ignored with the rest of `data/`.
+ */
+export const HISTORY_PATH = `${ROOT}data/history.json`;
 /** Leftovers carried from the previous plan. */
 export const CARRYOVER_PATH = `${ROOT}data/carryover.json`;
 
