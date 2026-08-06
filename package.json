@@ -11,7 +11,8 @@
     "search": "bun run src/ingredients.ts",
     "test": "bun test",
     "check-types": "tsc --noEmit",
-    "rate": "bun run src/rate.ts"
+    "rate": "bun run src/rate.ts",
+    "cart": "bun run src/cart.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
