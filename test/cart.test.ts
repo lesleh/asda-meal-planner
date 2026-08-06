@@ -12,13 +12,13 @@ describe("readIdentity", () => {
   test("recognises a registered user and pulls the customer id from isb", () => {
     const token = jwt({
       sty: "User",
-      isb: "uido:azure::uidn:Leslie test::rcid:ABC123::chid:ASDA_GROCERIES",
+      isb: "uido:azure::uidn:Test User::rcid:ABC123::chid:ASDA_GROCERIES",
       exp: Math.floor(Date.now() / 1000) + 1800,
     });
     const id = readIdentity(token);
     expect(id.registered).toBe(true);
     expect(id.customerId).toBe("ABC123");
-    expect(id.name).toBe("Leslie test");
+    expect(id.name).toBe("Test User");
   });
 
   test("treats a guest token as unregistered", () => {
