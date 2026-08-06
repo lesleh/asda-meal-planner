@@ -43,6 +43,24 @@ Everything tunable lives in `src/config.ts`.
 - `PANTRY` lists ingredients assumed already owned, so a plan does not buy a litre of oil to use 45ml
 - `STORE_ID` selects the store that stock and pricing are scoped to
 
+## Leftovers
+
+Supermarket pack sizes do not match recipe quantities, so a plan that buys 2kg of
+potatoes to cook 800g leaves the rest in the fridge. Two things address that.
+
+First, plans are scored on cost **plus** waste, so a cheaper plan that throws food
+away loses to one that eats what it buys. If more than 10% of the shop goes uneaten,
+the plan goes back to the model with the itemised leftovers and a request to use
+them up.
+
+Second, whatever is genuinely left over persists to `data/carryover.json` and is
+offered to the next run as free stock. Each item gets a shelf life derived from its
+department, so a plan will build around a bag of frozen peas from last month but
+never around fresh chicken from a fortnight ago.
+
+In practice this took a real plan from 21% waste to 8%, and the following week's
+plan cooked 200g of carried-over chicken rather than buying more.
+
 ## How the data is sourced
 
 Three separate ASDA backends, all reached without any account credentials.
@@ -63,8 +81,9 @@ Note that the Salesforce API is reached at its origin host rather than through
 ## Known limitations
 
 - **Multibuy promotions are not priced.** "Any 3 for £5" is recorded per product but
-  the basket is costed at single-item prices, so the total is an overestimate for
-  plans that trigger a multibuy.
+  the basket is costed at single-item prices. In practice this costs nothing today,
+  because a plan buying one of a "buy 4" group gets no discount either way. It
+  matters once the planner is allowed to buy extra deliberately to hit a threshold.
 - **Some units cannot be reconciled.** A recipe wanting "2 onions" against a 1kg bag
   has no per-item weight anywhere in the data. Those lines are flagged rather than
   guessed, and priced as a single pack.
@@ -73,6 +92,9 @@ Note that the Salesforce API is reached at its origin host rather than through
   separate `Whole Milk` from `Milk Drinks`. Tests assert every hint still resolves.
 - **Snapshots go stale.** Prices and promotions change daily. Re-run `bun run snapshot`
   before planning.
+- **Shelf lives are department-level guesses.** An opened pack does not keep as long
+  as a sealed one, and nothing here tracks whether a leftover was opened. Departments
+  that match no pattern fall back to 10 days.
 
 ## Legal
 
