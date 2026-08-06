@@ -1,0 +1,44 @@
+/** Project-wide configuration and filesystem layout. */
+
+const ROOT = new URL("../", import.meta.url).pathname;
+
+/** Snapshot database. Gitignored: it is rebuilt by `bun run snapshot`. */
+export const DB_PATH = `${ROOT}data/snapshot.db`;
+/** Most recent generated meal plan. */
+export const PLAN_PATH = `${ROOT}data/plan.json`;
+
+export const HOUSEHOLD = {
+  adults: 2,
+  children: 3,
+  /** A child eats roughly this fraction of an adult portion. */
+  childPortion: 0.6,
+  /** Hard ceiling, per person per meal. */
+  budgetPerPortion: 2.0,
+};
+
+/** People at the table; the budget is charged per head. */
+export const PEOPLE = HOUSEHOLD.adults + HOUSEHOLD.children;
+/** Portions to actually cook. */
+export const ADULT_EQUIVALENT =
+  HOUSEHOLD.adults + HOUSEHOLD.children * HOUSEHOLD.childPortion;
+
+/** ASDA store to price against. Governs stock and shelf availability. */
+export const STORE_ID = "4618";
+
+/**
+ * Assumed already in the cupboard, so not costed. Matched on the recipe's
+ * search term, to stop a plan buying a litre of oil to use 45ml of it.
+ */
+export const PANTRY = [
+  "vegetable oil", "olive oil", "sunflower oil", "oil", "salt", "pepper",
+  "black pepper", "plain flour", "self raising flour", "flour", "sugar",
+  "caster sugar", "cornflour", "stock cubes", "chicken stock",
+  "vegetable stock", "dried mixed herbs", "mixed herbs", "oregano", "thyme",
+  "paprika", "cumin", "ground cumin", "coriander", "turmeric",
+  "chilli powder", "curry powder", "garam masala", "cinnamon", "bay leaves",
+  "soy sauce", "vinegar", "white wine vinegar", "balsamic vinegar",
+  "tomato puree", "mustard", "honey", "worcestershire sauce",
+];
+
+export const isPantry = (term: string): boolean =>
+  PANTRY.includes(term.trim().toLowerCase());
