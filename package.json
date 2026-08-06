@@ -1,0 +1,19 @@
+{
+  "name": "asda-meal-planner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Builds budget-constrained family meal plans from ASDA's current promotional pricing.",
+  "scripts": {
+    "snapshot": "bun run src/snapshot.ts",
+    "snapshot:diff": "bun run src/snapshot.ts --diff",
+    "plan": "bun run src/mealplan.ts",
+    "search": "bun run src/ingredients.ts",
+    "test": "bun test",
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}

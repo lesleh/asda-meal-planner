@@ -1,0 +1,9 @@
+node_modules/
+
+# Rebuilt by `bun run snapshot`; large and stale within hours.
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Generated meal plans.
+data/plan.json
