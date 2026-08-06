@@ -58,6 +58,8 @@ interface ShoppingItem {
 interface Plan {
   generatedAt: string;
   shoppingList: ShoppingItem[];
+  /** Snacks added to clear the delivery minimum; carted alongside the meals. */
+  snacks?: { cin: string; name: string; packs: number; cost: number }[];
 }
 
 /** Decode a JWT payload without verifying it; we only read our own claims. */
@@ -140,7 +142,12 @@ async function main(): Promise<void> {
   if (args.has("--bookmarklet")) return installBookmarklet();
 
   const plan = (await Bun.file(PLAN_PATH).json()) as Plan;
-  const items = plan.shoppingList.filter((item) => item.packs > 0);
+  // Snacks are part of the shop: they clear the delivery minimum, so they go in
+  // the basket with the meal ingredients.
+  const items = [
+    ...plan.shoppingList,
+    ...(plan.snacks ?? []).map((s) => ({ cin: s.cin, name: s.name, packs: s.packs, cost: s.cost })),
+  ].filter((item) => item.packs > 0);
   if (items.length === 0) {
     console.log("nothing to add — run `bun run plan` first");
     return;

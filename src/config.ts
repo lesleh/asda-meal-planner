@@ -33,15 +33,33 @@ export const HOUSEHOLD = {
   children: 3,
   /** A child eats roughly this fraction of an adult portion. */
   childPortion: 0.6,
-  /** Hard ceiling, per person per meal. */
+  /** What a meal should aim to cost per head. Guidance, not a hard ceiling. */
   budgetPerPortion: 2.0,
 };
 
-/** People at the table; the budget is charged per head. */
+/** People at the table. */
 export const PEOPLE = HOUSEHOLD.adults + HOUSEHOLD.children;
 /** Portions to actually cook. */
 export const ADULT_EQUIVALENT =
   HOUSEHOLD.adults + HOUSEHOLD.children * HOUSEHOLD.childPortion;
+
+/**
+ * Shop budget.
+ *
+ * `deliveryMinimum` is a floor, not a ceiling: ASDA won't let you check out
+ * below it, so a lean meal plan that comes to less is useless. The gap between
+ * the meals and the floor is filled deliberately with snacks the children will
+ * eat (see `src/snacks.ts`), rather than left short or padded with filler.
+ *
+ * `cap` is the real "we're spending too much" limit; the shop should land
+ * between the floor and the cap. `maxSnackSpend` stops snacks alone ballooning
+ * to reach the floor on an unusually cheap meal week.
+ */
+export const BUDGET = {
+  deliveryMinimum: 40,
+  cap: 55,
+  maxSnackSpend: 15,
+};
 
 /** ASDA store to price against. Governs stock and shelf availability. */
 export const STORE_ID = "4618";
