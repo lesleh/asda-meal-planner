@@ -14,6 +14,7 @@ import { costPlan, type Line, type Recipe } from "./plan";
 import { buildArtifact, renderMarkdown } from "./report";
 import { validateRecipes, validateResolution } from "./validate";
 import { preferenceLines } from "./preferences";
+import { isGrazeable } from "./grazeable";
 import { loadRules, priceBasket, type BasketItem } from "./multibuy";
 import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "./history";
 import {
@@ -342,12 +343,17 @@ if (import.meta.main) {
       (line.leftover > 0 ? `   ${line.leftover}${line.unit} spare` : ""),
     );
   }
-  // Persist what the plan doesn't cook, so next week can spend it.
+  // Persist what the plan doesn't cook, so next week can spend it. Only
+  // prep-required items survive: anything ready-to-eat is grazed to nothing by
+  // the children within the day, so carrying it forward would be a fiction.
   const kept = saveCarryOver(
     best.lines
-      // Stockpiled surplus is excluded from waste but must still be recorded,
-      // or food that was deliberately bought quietly disappears.
-      .filter((l) => l.leftover + l.stockpiled > 0 && !l.staple)
+      .filter(
+        (l) =>
+          l.leftover + l.stockpiled > 0 &&
+          !l.staple &&
+          !isGrazeable(l.department, undefined, l.product?.name),
+      )
       .map((l) => ({
         term: l.term,
         unit: l.unit,
