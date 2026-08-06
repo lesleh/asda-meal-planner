@@ -13,6 +13,13 @@ That split matters: models are good at "chicken thighs and rice make a traybake"
 unreliable at "three 700g joints for 1,500g of demand at £4.67 each". Anything that
 adds up is done here, and the model only responds to the result.
 
+For the deeper picture, see the docs:
+
+- [docs/architecture.md](docs/architecture.md) covers the design principle, the
+  snapshot-resolve-cost-plan-cart pipeline, and where state lives.
+- [docs/api-notes.md](docs/api-notes.md) is the reverse-engineered map of ASDA's three
+  backends: endpoints, auth, the Cloudflare-vs-origin gotcha, and the field quirks.
+
 ## Setup
 
 Requires [Bun](https://bun.sh) and the `claude` CLI (already authenticated). No API
