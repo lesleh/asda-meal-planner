@@ -7,7 +7,11 @@ data/*.db-wal
 
 # Generated meal plans and the approved snack list; regenerated each run.
 data/plan.json
+data/plan.md
 data/snacks.json
+
+# Leftovers carried between shops; rewritten by every plan.
+data/carryover.json
 
 # The snack blocklist is personal taste; kept local so it never goes public
 # and never causes pull conflicts.
