@@ -13,6 +13,7 @@
 import { Database } from "bun:sqlite";
 import { DB_PATH } from "../config";
 import { PREFERENCES, type Preference, rejectionFor } from "./preferences";
+import { qualityWeight, tierOf } from "./quality";
 
 
 export interface Candidate {
@@ -20,6 +21,8 @@ export interface Candidate {
   name: string;
   shelf: string | null;
   department: string | null;
+  /** ASDA brand label, which encodes the value/premium tier. */
+  brand: string | null;
   price: number;
   wasPrice: number | null;
   discountPct: number | null;
@@ -79,6 +82,7 @@ interface Row {
   name: string;
   shelf: string | null;
   department: string | null;
+  brand: string | null;
   price: number;
   was_price: number | null;
   discount_pct: number | null;
@@ -115,6 +119,7 @@ const toCandidate = (row: Row): Candidate => ({
   name: row.name,
   shelf: row.shelf,
   department: row.department,
+  brand: row.brand,
   price: row.price,
   wasPrice: row.was_price,
   discountPct: row.discount_pct,
@@ -217,7 +222,7 @@ export function resolveIngredient(
         $onOfferOnly: number; $vegan: number; $vegetarian: number; $glutenFree: number;
       }
     >(`
-      SELECT p.cin, p.name, p.shelf, p.department, p.price, p.was_price,
+      SELECT p.cin, p.name, p.shelf, p.department, p.brand, p.price, p.was_price,
              p.discount_pct, p.pack_quantity, p.pack_unit, p.price_per_uom,
              p.uom, p.on_offer, p.vegan, p.vegetarian, p.no_gluten,
              bm25(product_search) AS rank
@@ -334,9 +339,13 @@ export function resolveIngredient(
   }
   const dominantUnit = [...unitCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 
+  // Rank on a quality-adjusted unit price: the value tier is treated as dearer
+  // so it stops winning by default, though its real price is unchanged.
+  const adjustedUom = (c: Candidate): number =>
+    (c.pricePerUom ?? Infinity) * qualityWeight(c.brand);
   const comparable = scoped.filter((candidate) => candidate.uom === dominantUnit);
   const ranked = (comparable.length > 0 ? comparable : scoped).sort(
-    (a, b) => (a.pricePerUom ?? Infinity) - (b.pricePerUom ?? Infinity),
+    (a, b) => adjustedUom(a) - adjustedUom(b),
   );
 
   const best = ranked[0];
@@ -374,7 +383,9 @@ if (import.meta.main) {
       const unit = candidate.pricePerUom != null ? `£${candidate.pricePerUom.toFixed(2)}/${candidate.uom}` : "-";
       const pack = candidate.packQuantity != null ? `${candidate.packQuantity}${candidate.packUnit}` : "-";
       const offer = candidate.onOffer ? `  OFFER${candidate.discountPct ? ` -${candidate.discountPct}%` : ""}` : "";
-      console.log(`   ${unit.padEnd(12)} £${String(candidate.price).padEnd(5)} ${pack.padEnd(9)} ${candidate.name}${offer}`);
+      const tier = tierOf(candidate.brand);
+      const tierTag = tier === "standard" ? "" : `  <${tier}>`;
+      console.log(`   ${unit.padEnd(12)} £${String(candidate.price).padEnd(5)} ${pack.padEnd(9)} ${candidate.name}${tierTag}${offer}`);
     }
   }
   db.close();

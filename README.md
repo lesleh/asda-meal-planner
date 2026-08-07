@@ -89,6 +89,7 @@ Everything tunable lives in `src/config.ts`.
 - `STORE_ID` selects the store that stock and pricing are scoped to
 - `PREFERENCES` in `src/planning/preferences.ts` rejects products the household won't eat
 - `DIETARY_NOTES` in the same file guides the model without filtering products
+- `VALUE_TIER_PENALTY` steers the resolver off ASDA's rock-bottom value tier (see Quality tier)
 
 ## Preferences
 
@@ -108,6 +109,22 @@ preference costs. Avoiding bone-in chicken adds about £4 to a generic "chicken
 thighs" line, since bone-in is roughly £2.90/kg against £6.47/kg for boneless
 fillets. Note that bone-in is only 65-70% edible, so the real gap is narrower than
 the shelf price suggests.
+
+## Quality tier
+
+Picking purely on unit price lands on ASDA's value tier ("Just Essentials") every
+time, since it is reliably the cheapest: the cheapest mince, the cheapest beans. That
+tier is labelled in the product's `brand`, so the resolver can see it. Rather than ban
+it, the ranking treats a value-tier product as if it cost `VALUE_TIER_PENALTY` more
+(30% by default) when choosing, while always billing the real price. A standard-tier
+product within that margin wins; the value tier is chosen only when it is the sole
+option or cheaper by more than the penalty.
+
+Soft by design, so it does not always dislodge the value tier. Just Essentials mince
+at £3.12 loses to standard mince at £3.25 (4% apart), but Just Essentials beans at
+£0.28 still beat the next tin at £0.39 (28% apart, under the penalty). Raise
+`VALUE_TIER_PENALTY` to push harder, at the cost of overpaying where the value tier
+was actually fine.
 
 ## Output
 

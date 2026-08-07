@@ -81,6 +81,15 @@ export const WILL_FREEZE = true;
 export const MIN_STOCKPILE_SAVING = 0.15;
 
 /**
+ * How much dearer ASDA's value tier ("Just Essentials") is treated as when
+ * choosing a product, though the real price is always what's billed. At 0.3 a
+ * standard-tier product within 30% of the value-tier price wins; the value tier
+ * is only chosen when it is the sole option or dramatically cheaper. This buys
+ * off the rock-bottom line without banning it. Set to 0 to disable.
+ */
+export const VALUE_TIER_PENALTY = 0.3;
+
+/**
  * Assumed already in the cupboard, so not costed. Matched on the recipe's
  * search term, to stop a plan buying a litre of oil to use 45ml of it.
  */

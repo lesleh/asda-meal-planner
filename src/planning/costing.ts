@@ -13,6 +13,7 @@ import { type Candidate, latestRun, resolveIngredient } from "./ingredients";
 import { carryOverKey } from "./leftovers";
 import { MIN_STOCKPILE_SAVING, WILL_FREEZE } from "../config";
 import { isStockpilable, loadRules, promoIdsFor } from "./multibuy";
+import { qualityWeight } from "./quality";
 import { DB_PATH } from "../config";
 
 
@@ -157,9 +158,12 @@ export function costPlan(
       if (packSupplies(candidate, entry.unit) === undefined) return bestSoFar;
       if (!bestSoFar) return candidate;
       const cost = (c: Candidate) => Math.ceil(toBuy / packSupplies(c, entry.unit)!) * c.price;
+      // Compare on a quality-adjusted cost so the value tier has to be markedly
+      // cheaper to win, but bill the real price (below). Ties break on waste.
+      const rankCost = (c: Candidate) => cost(c) * qualityWeight(c.brand);
       const waste = (c: Candidate) =>
         Math.ceil(toBuy / packSupplies(c, entry.unit)!) * packSupplies(c, entry.unit)! - toBuy;
-      const delta = cost(candidate) - cost(bestSoFar);
+      const delta = rankCost(candidate) - rankCost(bestSoFar);
       if (delta < -0.001) return candidate;
       if (delta > 0.001) return bestSoFar;
       return waste(candidate) < waste(bestSoFar) ? candidate : bestSoFar;
