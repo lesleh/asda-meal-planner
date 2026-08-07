@@ -66,19 +66,22 @@ your account. Leftovers from step 2 carry into the next shop's plan automaticall
 
 ## Commands
 
-| Command                                    | What it does                                                                                             |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `bun run snapshot`                         | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run               |
-| `bun run snapshot:diff`                    | Diff the two most recent runs without fetching                                                           |
-| `bun run plan [meals]`                     | Generate recipes, cost them, retry if the meals go over the cap. Defaults to 4 meals. Takes 3-12 minutes |
-| `bun run rate`                             | List everything cooked so far, with repeat counts and cost per person                                    |
-| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions                                         |
-| `bun run cart:setup`                       | Copy the token-grabbing bookmarklet to your clipboard, with install instructions                         |
-| `bun run cart --dry-run`                   | Show the shopping list that would be added, no network                                                   |
-| `bun run cart`                             | Add the current plan's shopping list to your ASDA basket (needs a pasted token)                          |
-| `bun run search <term>`                    | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`                         |
-| `bun test`                                 | Unit tests for pack parsing and ingredient resolution                                                    |
-| `bun run check-types`                      | `tsc --noEmit`                                                                                           |
+| Command                                    | What it does                                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `bun run snapshot`                         | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run          |
+| `bun run snapshot:diff`                    | Diff the two most recent runs without fetching                                                      |
+| `bun run plan [meals]`                     | Generate a buffer of recipes, review them interactively, cost them. Defaults to 4 meals             |
+| `bun run plan [meals] --no-review`         | Skip the review; generate and revise if over the cap (the old non-interactive flow, for automation) |
+| `bun run rate`                             | List everything cooked so far, with repeat counts and cost per person                               |
+| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions                                    |
+| `bun run dislike`                          | List the ingredients the planner has been told never to use                                         |
+| `bun run dislike "<thing>" "<why>"`        | Record something the household won't eat, e.g. `bun run dislike "frankfurters" "vile"`              |
+| `bun run cart:setup`                       | Copy the token-grabbing bookmarklet to your clipboard, with install instructions                    |
+| `bun run cart --dry-run`                   | Show the shopping list that would be added, no network                                              |
+| `bun run cart`                             | Add the current plan's shopping list to your ASDA basket (needs a pasted token)                     |
+| `bun run search <term>`                    | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`                    |
+| `bun test`                                 | Unit tests for pack parsing and ingredient resolution                                               |
+| `bun run check-types`                      | `tsc --noEmit`                                                                                      |
 
 ## Configuration
 
@@ -183,6 +186,30 @@ bun run rate "Liver and Onions" no        # never again
 
 History is tracked in git, unlike the rest of `data/`. The snapshot rebuilds in three
 seconds; a year of "the children actually ate this" does not.
+
+## Choosing recipes
+
+`bun run plan` does not just hand you a set and hope. It generates a couple more recipes
+than needed, then shows them with their per-head cost and lets you drop the ones you
+don't fancy. Because there is a buffer, dropping one comes straight out of the surplus,
+no waiting; the model is only asked again once the pool falls below the target. It is
+the same review flow as the snack picker, adapted for something that needs the model.
+
+When you drop a recipe you can name what to avoid, e.g. `frankfurters - vile`. That does
+two things: it steers the immediate regeneration, and it is saved as a dislike so future
+plans never build around it either. Dislikes are ingredient-level, not recipe-level: one
+"frankfurters" ban kills every frankfurter dish, not just the one you saw.
+
+```bash
+bun run dislike                              # what does it avoid?
+bun run dislike "frankfurters" "vile"        # never again, in any dish
+```
+
+Dislikes feed the generation prompt directly, rather than the resolver, on purpose. A
+product-level reject would let the model write a frankfurter dish and then fail to buy
+the frankfurters, leaving a broken recipe; telling the model up front stops it reaching
+for them at all. The list is kept local (`data/dislikes.json`, gitignored) as personal
+taste. Run `bun run plan --no-review` to skip the whole review, e.g. for automation.
 
 ## Snacks
 

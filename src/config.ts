@@ -23,6 +23,8 @@ export const CARRYOVER_PATH = `${ROOT}data/carryover.json`;
 export const BLOCKLIST_PATH = `${ROOT}data/blocklist.json`;
 /** The approved snack list, its own file so the cart can add it alone. */
 export const SNACKS_PATH = `${ROOT}data/snacks.json`;
+/** Ingredients the household won't eat. Gitignored: personal taste, kept local. */
+export const DISLIKES_PATH = `${ROOT}data/dislikes.json`;
 
 /**
  * Create `data/` if it is missing. It is gitignored in full, so a fresh clone
@@ -88,6 +90,14 @@ export const MIN_STOCKPILE_SAVING = 0.15;
  * off the rock-bottom line without banning it. Set to 0 to disable.
  */
 export const VALUE_TIER_PENALTY = 0.3;
+
+/**
+ * Extra recipes generated beyond the target so the interactive review can drop
+ * ones you don't fancy and pick from the surplus, without waiting on the model
+ * for a replacement every time. Only the model is asked again once the pool
+ * dips below the target.
+ */
+export const RECIPE_BUFFER = 2;
 
 /**
  * Assumed already in the cupboard, so not costed. Matched on the recipe's

@@ -14,6 +14,7 @@
     "test": "bun test",
     "check-types": "tsc --noEmit",
     "rate": "bun run src/commands/rate.ts",
+    "dislike": "bun run src/commands/dislike.ts",
     "cart": "bun run src/commands/cart.ts",
     "cart:setup": "bun run src/commands/cart.ts --bookmarklet"
   },

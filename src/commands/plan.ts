@@ -10,17 +10,19 @@
 
 import { Database } from "bun:sqlite";
 import { latestRun } from "../planning/ingredients";
-import { costPlan, type Line, type Recipe } from "../planning/costing";
+import { costPlan, recipeCosts, type Line, type Recipe } from "../planning/costing";
+import { multiselect, text, isCancel } from "@clack/prompts";
 import { buildArtifact, renderMarkdown } from "../planning/report";
 import { validateRecipes, validateResolution } from "../planning/validate";
 import { preferenceLines } from "../planning/preferences";
+import { addDislike, dislikeLines, loadDislikes, parseBans } from "../planning/dislikes";
 import { isGrazeable } from "../planning/grazeable";
 import { selectSnacks, type SnackPick } from "../snacks/select";
 import { blockedCins } from "../snacks/blocklist";
 import { loadRules, priceBasket, type BasketItem } from "../planning/multibuy";
 import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "../planning/history";
 import { carryOverIndex, loadCarryOver, saveCarryOver } from "../planning/leftovers";
-import { DB_PATH, HISTORY_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry, BUDGET } from "../config";
+import { DB_PATH, HISTORY_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry, BUDGET, RECIPE_BUFFER } from "../config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;
@@ -65,12 +67,18 @@ function buildPrompt(
   carried: string[],
   avoid: { name: string; reason: string }[],
   liked: { name: string; verdict?: string }[],
+  dislikes: string[],
 ): string {
   const budget = HOUSEHOLD.budgetPerPortion * PEOPLE * meals;
   const avoidSection = avoid.length
     ? `\nALREADY COOKED RECENTLY — do NOT repeat these, and avoid anything that is
 essentially the same dish under another name. Variety is the point:
 ${avoid.map((a) => `- ${a.name} (${a.reason})`).join("\n")}\n`
+    : "";
+  const dislikeSection = dislikes.length
+    ? `\nWILL NOT EAT — never build a meal around these, the household finds them
+inedible. The reason is given so you can avoid similar things too:
+${dislikes.join("\n")}\n`
     : "";
   const likedSection = liked.length
     ? `\nMEALS THIS HOUSEHOLD LIKED — include one or two if they fit the budget and
@@ -99,7 +107,7 @@ allowance tops the shop up afterwards, so you do not need to hit any total here.
 ALREADY IN THE CUPBOARD — use freely, they cost nothing and must still be listed
 with "staple": true:
 ${PANTRY.join(", ")}
-${carriedSection}${avoidSection}${likedSection}
+${carriedSection}${avoidSection}${likedSection}${dislikeSection}
 
 PROMOTED INGREDIENTS (cheapest per unit first):
 ${lines.join("\n")}
@@ -164,6 +172,23 @@ proteins, reducing meat quantities, and leaning harder on cheap bulk (potatoes,
 rice, pasta, pulses, tinned tomatoes, frozen veg). Keep the same number of meals.
 Keep the "method" steps for any meal you leave unchanged, and write new ones
 for any meal you change. Reply with ONLY the corrected JSON array.`;
+}
+
+/**
+ * Ask for a few fresh options during interactive review, without repeating what
+ * is already kept or was just rejected. `base` already carries the household,
+ * budget, offers and current dislikes, so this only adds the exclusions.
+ */
+function buildReplacementPrompt(base: string, exclude: string[], need: number): string {
+  return `${base}
+
+---
+
+Give ${need} NEW dinner option(s) ONLY. Do not repeat, and do not lightly rename,
+any of these, which are already chosen or have been rejected:
+${exclude.map((name) => `- ${name}`).join("\n")}
+
+Reply with ONLY a JSON array of the ${need} new recipe(s).`;
 }
 
 function extractJson(text: string): string {
@@ -234,52 +259,111 @@ if (import.meta.main) {
     console.log(`carried from last shop: ${carried.map((c) => `${c.quantity}${c.unit} ${c.term}`).join(", ")}\n`);
   }
 
-  // Measured, not guessed: 170-260s per call, and the revision prompt is
-  // longer than the first so later attempts are slower.
-  console.log(`up to ${MAX_ATTEMPTS} model calls at roughly 3-4 minutes each; expect 3-12 minutes\n`);
   const runStarted = Date.now();
 
   const history = loadHistory();
   const avoid = toAvoid(history);
   const liked = favourites(history);
+  let dislikes = loadDislikes();
   if (avoid.length) console.log(`avoiding ${avoid.length} recently cooked meals`);
   if (liked.length) console.log(`may bring back: ${liked.map((r) => r.name).join(", ")}`);
+  if (dislikes.length) console.log(`never using: ${dislikes.map((d) => d.what).join(", ")}`);
 
-  const basePrompt = buildPrompt(
-    promotedIngredients(db, runId),
-    meals,
-    carried.map((c) => `- ${c.quantity}${c.unit} ${c.term}`),
-    avoid,
-    liked,
-  );
-  let prompt = basePrompt;
   const rules = loadRules(db, runId);
-  let best:
-    | { recipes: Recipe[]; lines: Line[]; total: number; basket: ReturnType<typeof priceBasket> }
-    | undefined;
+  const promoted = promotedIngredients(db, runId);
+  const carriedLines = carried.map((c) => `- ${c.quantity}${c.unit} ${c.term}`);
+  const money = (n: number) => `£${n.toFixed(2)}`;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const recipes = await ask(prompt, `attempt ${attempt}/${MAX_ATTEMPTS}`);
+  /** Cost a set of recipes into the shape the rest of the run consumes. */
+  const cost = (recipes: Recipe[]) => {
     const lines = applyPantry(costPlan(db, runId, recipes, carryOver));
     const gross = lines.reduce((n, l) => n + l.cost, 0);
     const basket = priceBasket(toBasket(lines), rules);
-    // Multibuys are priced across the whole basket, so the discount lands
-    // here rather than on any single line.
+    // Multibuys price across the whole basket, so the discount lands here.
     const total = Math.round((gross - basket.saving) * 100) / 100;
+    return { recipes, lines, total, basket };
+  };
 
-    // No waste term any more: this household eats surplus rather than binning
-    // it, so a bigger pack is more food, not waste. The only thing to steer on
-    // is keeping the meals under the cap; the snack pass tops up to the floor.
-    const overCap = total > BUDGET.cap;
-    console.log(
-      `attempt ${attempt}: meals £${total.toFixed(2)} ` +
-      `(${overCap ? `£${(total - BUDGET.cap).toFixed(2)} over the £${BUDGET.cap} cap` : "within cap"}) — ` +
-      recipes.map((r) => r.name).join("; "),
+  const buildBase = () =>
+    buildPrompt(promoted, meals, carriedLines, avoid, liked, dislikeLines(dislikes));
+
+  /**
+   * Interactive review: over-generate, then let you drop the ones you don't
+   * fancy. Drops come from surplus instantly; the model is only asked again
+   * when the pool falls below the target. Reasons are saved as dislikes so the
+   * lesson carries to the next shop too.
+   */
+  async function runReview(): Promise<ReturnType<typeof cost>> {
+    console.log(`generating ${meals + RECIPE_BUFFER} options to choose from (one model call, ~3-4 min)...\n`);
+    let pool = await ask(
+      buildPrompt(promoted, meals + RECIPE_BUFFER, carriedLines, avoid, liked, dislikeLines(dislikes)),
+      "generating",
     );
+    const rejected = new Set<string>();
 
-    if (!best || total < best.total) best = { recipes, lines, total, basket };
-    if (!overCap) break;
-    if (attempt < MAX_ATTEMPTS) prompt = buildRevisionPrompt(basePrompt, recipes, lines);
+    while (true) {
+      const per = recipeCosts(pool, cost(pool).lines);
+      const drop = await multiselect({
+        message: `${pool.length} options, you need ${meals}. Tick any to drop; submit with none ticked to keep the cheapest ${meals}.`,
+        options: pool.map((r) => {
+          const c = per.get(r.name);
+          return { value: r.name, label: `${money(c?.perHead ?? 0)}/head  ${r.name}`, hint: c ? money(c.total) : undefined };
+        }),
+        required: false,
+      });
+      if (isCancel(drop)) break; // accept what we have
+      const dropped = drop as string[];
+      if (dropped.length === 0) break; // accepted
+
+      const bans = await text({
+        message: "Ban any ingredients for good? e.g. 'frankfurters - vile' (comma-separated). Enter to just swap.",
+        defaultValue: "",
+      });
+      if (!isCancel(bans) && bans.trim()) {
+        for (const ban of parseBans(bans)) addDislike(ban.what, ban.reason);
+        dislikes = loadDislikes();
+      }
+
+      dropped.forEach((name) => rejected.add(name));
+      pool = pool.filter((r) => !dropped.includes(r.name));
+
+      if (pool.length < meals) {
+        const need = meals + RECIPE_BUFFER - pool.length;
+        const exclude = [...pool.map((r) => r.name), ...rejected];
+        const fresh = await ask(buildReplacementPrompt(buildBase(), exclude, need), "replacing");
+        pool = [...pool, ...fresh.filter((r) => !rejected.has(r.name) && !pool.some((p) => p.name === r.name))];
+      }
+    }
+
+    // Finalise to the cheapest `meals` of what survived.
+    const per = recipeCosts(pool, cost(pool).lines);
+    const chosen = [...pool]
+      .sort((a, b) => (per.get(a.name)?.perHead ?? Infinity) - (per.get(b.name)?.perHead ?? Infinity))
+      .slice(0, meals);
+    return cost(chosen);
+  }
+
+  const review = !process.argv.includes("--no-review") && Boolean(process.stdout.isTTY);
+  let best: ReturnType<typeof cost> | undefined;
+
+  if (review) {
+    best = await runReview();
+  } else {
+    // Non-interactive: generate, and revise while the meals are over the cap.
+    console.log(`up to ${MAX_ATTEMPTS} model calls at roughly 3-4 minutes each; expect 3-12 minutes\n`);
+    let prompt = buildBase();
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const plan = cost(await ask(prompt, `attempt ${attempt}/${MAX_ATTEMPTS}`));
+      const overCap = plan.total > BUDGET.cap;
+      console.log(
+        `attempt ${attempt}: meals ${money(plan.total)} ` +
+        `(${overCap ? `${money(plan.total - BUDGET.cap)} over the £${BUDGET.cap} cap` : "within cap"}) — ` +
+        plan.recipes.map((r) => r.name).join("; "),
+      );
+      if (!best || plan.total < best.total) best = plan;
+      if (!overCap) break;
+      if (attempt < MAX_ATTEMPTS) prompt = buildRevisionPrompt(buildBase(), plan.recipes, plan.lines);
+    }
   }
 
   if (!best) throw new Error("no plan produced");
@@ -314,7 +398,6 @@ if (import.meta.main) {
 
   ensureDataDir();
 
-  const money = (n: number) => `£${n.toFixed(2)}`;
   const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
 
   for (const recipe of best.recipes) {
@@ -372,14 +455,9 @@ if (import.meta.main) {
 
   const warnings = [...validateResolution(best.lines), ...validateRecipes(best.recipes)];
 
-  const perPerson = new Map<string, number>();
-  for (const recipe of best.recipes) {
-    const cost = recipe.ingredients.reduce((sum, ing) => {
-      const line = best!.lines.find((l) => l.term === ing.term && l.unit === ing.unit);
-      return sum + (line && line.needed > 0 ? (ing.quantity / line.needed) * line.cost : 0);
-    }, 0);
-    perPerson.set(recipe.name, Math.round((cost / Math.max(1, recipe.serves)) * 100) / 100);
-  }
+  const perPerson = new Map(
+    [...recipeCosts(best.recipes, best.lines)].map(([name, c]) => [name, c.perHead] as const),
+  );
   saveHistory(recordPlan(history, best.recipes, perPerson));
 
   const artifact = buildArtifact({

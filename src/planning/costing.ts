@@ -252,6 +252,30 @@ export function costPlan(
   return lines;
 }
 
+/**
+ * Attribute cost to each recipe by its share of every ingredient line, so a
+ * plan can be shown or ranked per dish. A line shared across recipes is split
+ * by how much each one uses. Staples cost nothing, so they fall out via the
+ * line cost already being zeroed upstream.
+ */
+export function recipeCosts(
+  recipes: Recipe[],
+  lines: Line[],
+): Map<string, { total: number; perHead: number }> {
+  const costs = new Map<string, { total: number; perHead: number }>();
+  for (const recipe of recipes) {
+    const total = recipe.ingredients.reduce((sum, ing) => {
+      const line = lines.find((l) => l.term === ing.term && l.unit === ing.unit);
+      return sum + (line && line.needed > 0 ? (ing.quantity / line.needed) * line.cost : 0);
+    }, 0);
+    costs.set(recipe.name, {
+      total: Math.round(total * 100) / 100,
+      perHead: Math.round((total / Math.max(1, recipe.serves)) * 100) / 100,
+    });
+  }
+  return costs;
+}
+
 // ---------------------------------------------------------------------------
 // Demo: the shape a planning model would emit
 // ---------------------------------------------------------------------------
