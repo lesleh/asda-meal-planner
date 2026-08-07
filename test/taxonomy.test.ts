@@ -21,6 +21,15 @@ describe("isDrink", () => {
     expect(isDrink(null, null, "Salted Popcorn")).toBe(false);
     expect(isDrink("Chilled", "Cheese", "Mature Cheddar 350g")).toBe(false);
   });
+
+  test("'cola' is word-bounded so chocolate is not a drink", () => {
+    // Regression: "cola" used to match choCOLAte, wrongly excluding chocolate
+    // from the snack picker.
+    expect(isDrink("Chocolate & Sweets", "Chocolate Bars", "Dairy Milk 110g")).toBe(false);
+    expect(isDrink(null, null, "Chocolate Digestives")).toBe(false);
+    // A real cola is still a drink.
+    expect(isDrink(null, "Fizzy Drinks", "Cherry Cola 2L")).toBe(true);
+  });
 });
 
 describe("isGenuineCut", () => {

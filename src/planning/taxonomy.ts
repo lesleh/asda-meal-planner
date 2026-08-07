@@ -69,7 +69,7 @@ export const isPreparedMeal = (product: { department: string | null; shelf: stri
 const DRINK = new RegExp(
   [
     "squash|cordial",
-    "fizzy|cola|lemonade",
+    "fizzy|\\bcola\\b|lemonade", // \b so "cola" doesn't match choCOLAte
     "juice|smoothie",
     "\\bwater\\b|coconut water|tonic|mixer",
     "energy.*drink|sports.*drink|health.*drink|soft drink",
