@@ -7,7 +7,7 @@
  * rather than rejecting it.
  */
 
-import type { Line, Recipe } from "./plan";
+import type { Line, Recipe } from "./costing";
 
 /** "carrots and broccoli" is two shopping items pretending to be one. */
 const COMPOUND = /\s+(?:and|&|,|\+)\s+/i;

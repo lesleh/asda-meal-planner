@@ -5,7 +5,7 @@
  * and layers ASDA's index schema and filter conventions on top.
  */
 
-import { STORE_ID } from "./config";
+import { STORE_ID } from "../config";
 
 const DEFAULTS = {
   appId: "8I6WSKCCNV",

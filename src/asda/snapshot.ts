@@ -17,7 +17,7 @@
 import { Database } from "bun:sqlite";
 import { AsdaClient, FOOD_CATEGORIES, type AsdaProduct } from "./search";
 import { formatPackSize, parsePackSize } from "./packsize";
-import { DB_PATH, ensureDataDir } from "./config";
+import { DB_PATH, ensureDataDir } from "../config";
 
 const PAGE_SIZE = 1000;
 

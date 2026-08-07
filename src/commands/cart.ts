@@ -14,8 +14,8 @@
  *   ASDA_TOKEN="$(pbpaste)" bun run cart
  */
 
-import { ASDA_COMMERCE } from "./slas";
-import { PLAN_PATH, SNACKS_PATH } from "./config";
+import { ASDA_COMMERCE } from "../asda/commerce";
+import { PLAN_PATH, SNACKS_PATH } from "../config";
 
 const BASE = `https://${ASDA_COMMERCE.shortCode}.api.commercecloud.salesforce.com`;
 const SITE = ASDA_COMMERCE.channelId;

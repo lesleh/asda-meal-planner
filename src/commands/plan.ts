@@ -9,18 +9,18 @@
  */
 
 import { Database } from "bun:sqlite";
-import { latestRun } from "./ingredients";
-import { costPlan, type Line, type Recipe } from "./plan";
-import { buildArtifact, renderMarkdown } from "./report";
-import { validateRecipes, validateResolution } from "./validate";
-import { preferenceLines } from "./preferences";
-import { isGrazeable } from "./grazeable";
-import { selectSnacks, type SnackPick } from "./snacks";
-import { blockedCins } from "./blocklist";
-import { loadRules, priceBasket, type BasketItem } from "./multibuy";
-import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "./history";
-import { carryOverIndex, loadCarryOver, saveCarryOver } from "./leftovers";
-import { DB_PATH, HISTORY_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry, BUDGET } from "./config";
+import { latestRun } from "../planning/ingredients";
+import { costPlan, type Line, type Recipe } from "../planning/costing";
+import { buildArtifact, renderMarkdown } from "../planning/report";
+import { validateRecipes, validateResolution } from "../planning/validate";
+import { preferenceLines } from "../planning/preferences";
+import { isGrazeable } from "../planning/grazeable";
+import { selectSnacks, type SnackPick } from "../snacks/select";
+import { blockedCins } from "../snacks/blocklist";
+import { loadRules, priceBasket, type BasketItem } from "../planning/multibuy";
+import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "../planning/history";
+import { carryOverIndex, loadCarryOver, saveCarryOver } from "../planning/leftovers";
+import { DB_PATH, HISTORY_PATH, PLAN_MD_PATH, PLAN_PATH, STORE_ID, ensureDataDir, HOUSEHOLD, PEOPLE, ADULT_EQUIVALENT, PANTRY, isPantry, BUDGET } from "../config";
 
 const MODEL = "sonnet";
 const MAX_ATTEMPTS = 3;

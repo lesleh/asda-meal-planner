@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { favourites, historyKey, rate, recordPlan, toAvoid, type RecipeRecord } from "../src/history";
-import type { Recipe } from "../src/plan";
+import { favourites, historyKey, rate, recordPlan, toAvoid, type RecipeRecord } from "../src/planning/history";
+import type { Recipe } from "../src/planning/costing";
 
 const recipe = (name: string): Recipe => ({
   name, serves: 5, method: ["Cook."], ingredients: [{ term: "onions", quantity: 100, unit: "g" }],

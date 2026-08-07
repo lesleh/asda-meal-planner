@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatPackSize, parsePackSize } from "../src/packsize";
+import { formatPackSize, parsePackSize } from "../src/asda/packsize";
 
 describe("parsePackSize", () => {
   const cases: [string, string | undefined, string][] = [

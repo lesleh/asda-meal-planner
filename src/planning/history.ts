@@ -12,8 +12,8 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { DATA_DIR, HISTORY_PATH } from "./config";
-import type { Recipe } from "./plan";
+import { DATA_DIR, HISTORY_PATH } from "../config";
+import type { Recipe } from "./costing";
 
 export type Verdict = "loved" | "liked" | "no";
 

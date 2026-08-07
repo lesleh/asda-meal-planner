@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Recipe } from "../src/plan";
-import { validateRecipes, validateResolution } from "../src/validate";
+import type { Recipe } from "../src/planning/costing";
+import { validateRecipes, validateResolution } from "../src/planning/validate";
 
 const recipe = (over: Partial<Recipe> = {}): Recipe => ({
   name: "Test",

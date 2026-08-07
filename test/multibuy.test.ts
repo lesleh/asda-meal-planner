@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   type BasketItem, type MultibuyRule, isStockpilable, parseMechanic, priceBasket,
-} from "../src/multibuy";
+} from "../src/planning/multibuy";
 
 describe("parseMechanic", () => {
   test("parses fixed-price multibuys", () => {
@@ -100,8 +100,8 @@ describe("stockpiling in costPlan", () => {
   test("buys up to a multibuy threshold and books the surplus as inventory", async () => {
     const { Database } = await import("bun:sqlite");
     const { DB_PATH } = await import("../src/config");
-    const { latestRun } = await import("../src/ingredients");
-    const { costPlan } = await import("../src/plan");
+    const { latestRun } = await import("../src/planning/ingredients");
+    const { costPlan } = await import("../src/planning/costing");
 
     const db = new Database(DB_PATH, { readonly: true });
     const line = costPlan(db, latestRun(db), [
@@ -117,7 +117,7 @@ describe("stockpiling in costPlan", () => {
   });
 
   test("declines to stockpile fresh produce however good the offer", async () => {
-    const { isStockpilable } = await import("../src/multibuy");
+    const { isStockpilable } = await import("../src/planning/multibuy");
     expect(isStockpilable("Fresh Vegetables", true)).toBe(false);
   });
 });

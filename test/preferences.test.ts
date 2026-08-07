@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { DB_PATH } from "../src/config";
-import { latestRun, resolveIngredient } from "../src/ingredients";
-import { PREFERENCES, rejectionFor } from "../src/preferences";
+import { latestRun, resolveIngredient } from "../src/planning/ingredients";
+import { PREFERENCES, rejectionFor } from "../src/planning/preferences";
 
 describe("rejectionFor", () => {
   const rejected = (name: string) => Boolean(rejectionFor({ name }));
@@ -67,7 +67,7 @@ describe("preference premium", () => {
   const db2 = new Database(DB_PATH, { readonly: true });
 
   test("charges the premium when a generic term would have resolved to a rejected product", async () => {
-    const { costPlan } = await import("../src/plan");
+    const { costPlan } = await import("../src/planning/costing");
     const line = costPlan(db2, latestRun(db2), [
       { name: "x", serves: 5, ingredients: [{ term: "chicken thighs", quantity: 800, unit: "g" }] },
     ])[0]!;
@@ -78,7 +78,7 @@ describe("preference premium", () => {
   // When the model already asks for a compliant product the cheap option is
   // never a candidate, so there is nothing to charge for.
   test("charges nothing when the term never matched a rejected product", async () => {
-    const { costPlan } = await import("../src/plan");
+    const { costPlan } = await import("../src/planning/costing");
     const line = costPlan(db2, latestRun(db2), [
       { name: "x", serves: 5, ingredients: [{ term: "chicken thigh fillets", quantity: 600, unit: "g" }] },
     ])[0]!;

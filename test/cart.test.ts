@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BOOKMARKLET, readIdentity } from "../src/cart";
+import { BOOKMARKLET, readIdentity } from "../src/commands/cart";
 
 // Minimal unsigned JWTs; the code only reads claims, never verifies them.
 const jwt = (payload: Record<string, unknown>): string => {

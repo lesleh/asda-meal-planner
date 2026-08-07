@@ -8,7 +8,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { CARRYOVER_PATH, DATA_DIR } from "./config";
+import { CARRYOVER_PATH, DATA_DIR } from "../config";
 
 export interface CarryOverItem {
   term: string;

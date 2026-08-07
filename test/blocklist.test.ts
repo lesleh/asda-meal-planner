@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { block, blockedCins, loadBlocklist } from "../src/blocklist";
+import { block, blockedCins, loadBlocklist } from "../src/snacks/blocklist";
 
 // These touch data/blocklist.json; each test namespaces its CINs and cleans up.
 describe("blocklist", () => {

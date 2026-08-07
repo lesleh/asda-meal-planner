@@ -11,7 +11,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { DB_PATH } from "./config";
+import { DB_PATH } from "../config";
 import { PREFERENCES, type Preference, rejectionFor } from "./preferences";
 
 

@@ -10,8 +10,8 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { isGrazeable } from "./grazeable";
-import { PREFERENCES, rejectionFor } from "./preferences";
+import { isGrazeable } from "../planning/grazeable";
+import { PREFERENCES, rejectionFor } from "../planning/preferences";
 
 export interface SnackPick {
   cin: string;

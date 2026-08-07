@@ -10,7 +10,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { BLOCKLIST_PATH, DATA_DIR } from "./config";
+import { BLOCKLIST_PATH, DATA_DIR } from "../config";
 
 export interface BlockedItem {
   cin: string;

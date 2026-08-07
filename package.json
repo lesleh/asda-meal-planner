@@ -6,16 +6,16 @@
   "type": "module",
   "description": "Builds budget-constrained family meal plans from ASDA's current promotional pricing.",
   "scripts": {
-    "snapshot": "bun run src/snapshot.ts",
-    "snapshot:diff": "bun run src/snapshot.ts --diff",
-    "plan": "bun run src/mealplan.ts",
-    "snacks": "bun run src/snacks-run.ts",
-    "search": "bun run src/ingredients.ts",
+    "snapshot": "bun run src/asda/snapshot.ts",
+    "snapshot:diff": "bun run src/asda/snapshot.ts --diff",
+    "plan": "bun run src/commands/plan.ts",
+    "snacks": "bun run src/commands/snacks.ts",
+    "search": "bun run src/planning/ingredients.ts",
     "test": "bun test",
     "check-types": "tsc --noEmit",
-    "rate": "bun run src/rate.ts",
-    "cart": "bun run src/cart.ts",
-    "cart:setup": "bun run src/cart.ts --bookmarklet"
+    "rate": "bun run src/commands/rate.ts",
+    "cart": "bun run src/commands/cart.ts",
+    "cart:setup": "bun run src/commands/cart.ts --bookmarklet"
   },
   "devDependencies": {
     "@types/bun": "latest",

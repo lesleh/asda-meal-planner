@@ -11,10 +11,10 @@
 
 import { Database } from "bun:sqlite";
 import { intro, isCancel, multiselect, note, outro, spinner } from "@clack/prompts";
-import { BUDGET, DB_PATH, SNACKS_PATH, ensureDataDir } from "./config";
-import { latestRun } from "./ingredients";
-import { block, blockedCins } from "./blocklist";
-import { selectSnacks, type SnackPick } from "./snacks";
+import { BUDGET, DB_PATH, SNACKS_PATH, ensureDataDir } from "../config";
+import { latestRun } from "../planning/ingredients";
+import { block, blockedCins } from "../snacks/blocklist";
+import { selectSnacks, type SnackPick } from "../snacks/select";
 
 const money = (n: number) => `£${n.toFixed(2)}`;
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { carryOverIndex, shelfLifeDays, type CarryOverItem } from "../src/leftovers";
+import { carryOverIndex, shelfLifeDays, type CarryOverItem } from "../src/planning/leftovers";
 
 describe("shelfLifeDays", () => {
   test("fresh meat expires fast", () => {

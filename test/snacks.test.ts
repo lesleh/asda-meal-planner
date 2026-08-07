@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { DB_PATH } from "../src/config";
-import { latestRun } from "../src/ingredients";
-import { selectSnacks } from "../src/snacks";
+import { latestRun } from "../src/planning/ingredients";
+import { selectSnacks } from "../src/snacks/select";
 
 const fixed = () => 0.5; // deterministic ordering for assertions
 
@@ -13,7 +13,7 @@ const seeded = (seed: number) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-import { isGrazeable } from "../src/grazeable";
+import { isGrazeable } from "../src/planning/grazeable";
 
 const db = new Database(DB_PATH, { readonly: true });
 let runId: number;

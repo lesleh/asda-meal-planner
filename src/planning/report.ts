@@ -7,9 +7,9 @@
  */
 
 import type { CarryOverItem } from "./leftovers";
-import type { Line, Recipe } from "./plan";
+import type { Line, Recipe } from "./costing";
 import type { BasketPricing } from "./multibuy";
-import type { SnackPick } from "./snacks";
+import type { SnackPick } from "../snacks/select";
 
 export interface CostedIngredient {
   term: string;

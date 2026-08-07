@@ -11,9 +11,9 @@
 import { Database } from "bun:sqlite";
 import { type Candidate, latestRun, resolveIngredient } from "./ingredients";
 import { carryOverKey } from "./leftovers";
-import { MIN_STOCKPILE_SAVING, WILL_FREEZE } from "./config";
+import { MIN_STOCKPILE_SAVING, WILL_FREEZE } from "../config";
 import { isStockpilable, loadRules, promoIdsFor } from "./multibuy";
-import { DB_PATH } from "./config";
+import { DB_PATH } from "../config";
 
 
 export interface RecipeIngredient {

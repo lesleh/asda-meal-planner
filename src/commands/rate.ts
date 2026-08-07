@@ -6,7 +6,7 @@
  *   bun run rate "Sausage Bake" no        never plan it again
  */
 
-import { loadHistory, rate, saveHistory, type Verdict } from "./history";
+import { loadHistory, rate, saveHistory, type Verdict } from "../planning/history";
 
 const VERDICTS: Verdict[] = ["loved", "liked", "no"];
 
