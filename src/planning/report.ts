@@ -9,7 +9,6 @@
 import type { CarryOverItem } from "./leftovers";
 import type { Line, Recipe } from "./costing";
 import type { BasketPricing } from "./multibuy";
-import type { SnackPick } from "../snacks/select";
 
 export interface CostedIngredient {
   term: string;
@@ -50,15 +49,13 @@ export interface PlanArtifact {
   snapshotRunId: number;
   storeId: string;
   household: { adults: number; children: number; people: number };
-  budget: { deliveryMinimum: number; cap: number; portions: number };
+  budget: { cap: number; portions: number };
   totals: {
-    mealCost: number; snackCost: number; shopTotal: number;
+    mealCost: number;
     costPerPortion: number; onOfferLines: number; preferencePremium: number;
-    clearsFloor: boolean;
   };
   recipes: CostedRecipe[];
   shoppingList: ShoppingItem[];
-  snacks: SnackPick[];
   cupboard: string[];
   carriedIn: CarryOverItem[];
   carriedOut: CarryOverItem[];
@@ -72,11 +69,8 @@ export interface BuildArtifactInput {
   runId: number;
   storeId: string;
   household: { adults: number; children: number; people: number };
-  budget: { deliveryMinimum: number; cap: number; portions: number };
+  budget: { cap: number; portions: number };
   mealCost: number;
-  snacks: SnackPick[];
-  snackCost: number;
-  shopTotal: number;
   carriedIn: CarryOverItem[];
   carriedOut: CarryOverItem[];
   warnings: string[];
@@ -144,17 +138,13 @@ export function buildArtifact(input: BuildArtifactInput): PlanArtifact {
     budget: input.budget,
     totals: {
       mealCost: Math.round(input.mealCost * 100) / 100,
-      snackCost: Math.round(input.snackCost * 100) / 100,
-      shopTotal: Math.round(input.shopTotal * 100) / 100,
       costPerPortion: Math.round((input.mealCost / Math.max(1, input.budget.portions)) * 100) / 100,
       onOfferLines: shoppingList.filter((item) => item.onOffer).length,
       preferencePremium:
         Math.round(input.lines.reduce((sum, line) => sum + line.preferencePremium, 0) * 100) / 100,
-      clearsFloor: input.shopTotal >= input.budget.deliveryMinimum,
     },
     recipes: costedRecipes,
     shoppingList,
-    snacks: input.snacks,
     cupboard: [...new Set(lines.filter((line) => line.staple).map((line) => line.term))],
     carriedIn: input.carriedIn,
     carriedOut: input.carriedOut,
@@ -175,9 +165,8 @@ export function renderMarkdown(plan: PlanArtifact): string {
   out.push(
     `${plan.recipes.length} meals for ${plan.household.adults} adults and ` +
       `${plan.household.children} children. ` +
-      `Meals ${money(plan.totals.mealCost)}, snacks ${money(plan.totals.snackCost)}, ` +
-      `**${money(plan.totals.shopTotal)}** total ` +
-      `(£${plan.budget.deliveryMinimum} delivery minimum, ${plan.totals.clearsFloor ? "cleared" : "NOT met"}).`,
+      `**${money(plan.totals.mealCost)}** (${money(plan.totals.costPerPortion)} per portion). ` +
+      `Snacks are a separate list (\`bun run snacks\`).`,
   );
   out.push("");
 
@@ -197,20 +186,8 @@ export function renderMarkdown(plan: PlanArtifact): string {
         `${money(item.cost)} | ${item.leftover > 0 ? `${item.leftover}${item.unit}` : "-"} |`,
     );
   }
-  for (const snack of plan.snacks) {
-    out.push(`| 1 | ${snack.name} **(snack)** | - | ${money(snack.cost)} | - |`);
-  }
-  out.push(`| | **Total** | | **${money(plan.totals.shopTotal)}** | |`);
+  out.push(`| | **Total** | | **${money(plan.totals.mealCost)}** | |`);
   out.push("");
-
-  if (plan.snacks.length > 0) {
-    out.push(
-      `A deliberate snack allowance, bought every shop: genuine reductions the ` +
-        `children graze through quickly. It also carries the cart over the ` +
-        `£${plan.budget.deliveryMinimum} delivery minimum.`,
-    );
-    out.push("");
-  }
 
   if (plan.multibuy.saving > 0) {
     out.push(`Multibuy promotions took ${money(plan.multibuy.saving)} off this shop:`);

@@ -74,7 +74,8 @@ orchestrate:
 - **`planning/`** is the meal-planning brain, all pure-ish logic: `ingredients`, `costing`,
   `multibuy`, `leftovers`, `grazeable`, `preferences`, `history`, `report`, `validate`.
 - **`snacks/`** is the snack feature: `select` (weighted-random pick) and `blocklist`.
-- **`commands/`** holds the entrypoints `bun run` targets: `plan`, `snacks`, `cart`, `rate`.
+- **`commands/`** holds the entrypoints `bun run` targets: `plan`, `snacks`, `cart`, `rate`,
+  `dislike`. Plan and snacks are independent; `cart` is the only one that combines them.
 - **`config.ts`** sits at the root; every group reads it and it imports nothing.
 
 Dependencies flow one way, up toward `commands/`, with no cycles.

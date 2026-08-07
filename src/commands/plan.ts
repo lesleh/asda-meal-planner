@@ -17,8 +17,6 @@ import { validateRecipes, validateResolution } from "../planning/validate";
 import { preferenceLines } from "../planning/preferences";
 import { addDislike, dislikeLines, loadDislikes, parseBans } from "../planning/dislikes";
 import { isGrazeable } from "../planning/taxonomy";
-import { selectSnacks, type SnackPick } from "../snacks/select";
-import { blockedCins } from "../snacks/blocklist";
 import { loadRules, priceBasket, type BasketItem } from "../planning/multibuy";
 import { favourites, loadHistory, recordPlan, saveHistory, toAvoid } from "../planning/history";
 import { carryOverIndex, loadCarryOver, saveCarryOver } from "../planning/leftovers";
@@ -101,8 +99,8 @@ Cook roughly ${ADULT_EQUIVALENT.toFixed(1)} adult portions per meal — children
 Set "serves" to ${PEOPLE} but size quantities for about ${ADULT_EQUIVALENT.toFixed(1)} adult portions.
 
 COST: keep meals economical, aiming around £${HOUSEHOLD.budgetPerPortion.toFixed(2)} per person
-per meal (£${budget.toFixed(2)} for the ${meals} meals). Cheaper is better; a separate snack
-allowance tops the shop up afterwards, so you do not need to hit any total here.
+per meal (£${budget.toFixed(2)} for the ${meals} meals). Cheaper is better; there is no
+minimum to hit here.
 
 ALREADY IN THE CUPBOARD — use freely, they cost nothing and must still be listed
 with "staple": true:
@@ -244,14 +242,12 @@ function applyPantry(lines: Line[]): Line[] {
 }
 
 if (import.meta.main) {
-  const argv = new Set(process.argv.slice(2));
-  const noSnacks = argv.has("--no-snacks");
   const meals = Number(process.argv.find((a) => /^\d+$/.test(a)) ?? 4);
   const db = new Database(DB_PATH, { readonly: true });
   const runId = latestRun(db);
 
   console.log(`household: ${HOUSEHOLD.adults} adults + ${HOUSEHOLD.children} children = ${PEOPLE} people (${ADULT_EQUIVALENT.toFixed(1)} adult portions)`);
-  console.log(`shop must clear the £${BUDGET.deliveryMinimum} delivery minimum; keep meals under the £${BUDGET.cap} cap\n`);
+  console.log(`keep meals under the £${BUDGET.cap} cap; snacks are a separate list (bun run snacks)\n`);
 
   const carried = loadCarryOver();
   const carryOver = carryOverIndex(carried);
@@ -368,33 +364,7 @@ if (import.meta.main) {
 
   if (!best) throw new Error("no plan produced");
 
-  // Snacks are a deliberate line the children will graze through, not just
-  // gap-filler. Spend the allowance every shop, and more if the meals leave
-  // the cart short of the delivery minimum.
   const mealCost = best.total; // already net of the multibuy saving
-  const inBasket = new Set(best.lines.filter((l) => l.product).map((l) => l.product!.cin));
-  const snackTargetCart = Math.max(
-    BUDGET.deliveryMinimum,
-    mealCost + BUDGET.snackAllowance,
-  );
-  for (const cin of blockedCins()) inBasket.add(cin);
-  const snacks = noSnacks
-    ? []
-    : selectSnacks(db, runId, {
-        targetSpend: snackTargetCart,
-        maxSpend: BUDGET.maxSnackSpend,
-        exclude: inBasket,
-      }, mealCost);
-  const snackCost = Math.round(snacks.reduce((n: number, s: SnackPick) => n + s.cost, 0) * 100) / 100;
-  const shopTotal = Math.round((mealCost + snackCost) * 100) / 100;
-
-  if (snacks.length) {
-    console.log(`\nsnack allowance (grazed, bought every shop): +£${snackCost.toFixed(2)}`);
-    for (const s of snacks) console.log(`  £${s.cost.toFixed(2).padStart(5)}  -${s.discountPct}%  ${s.name}`);
-  }
-  if (shopTotal < BUDGET.deliveryMinimum) {
-    console.log(`\nstill £${(BUDGET.deliveryMinimum - shopTotal).toFixed(2)} under the floor after snacks; add a meal or raise maxSnackSpend`);
-  }
 
   ensureDataDir();
 
@@ -425,12 +395,6 @@ if (import.meta.main) {
       `${pad(`${p.packQuantity ?? "?"}${p.packUnit ?? ""}`, 10)}${money(line.cost).padStart(8)}` +
       (line.leftover > 0 ? `   ${line.leftover}${line.unit} spare` : ""),
     );
-  }
-  if (snacks.length) {
-    console.log(`  ${"-".repeat(84)}\n  snacks & extras (to clear the £${BUDGET.deliveryMinimum} floor):`);
-    for (const s of snacks) {
-      console.log(`  ${pad("1 x", 6)}${pad(s.name + " *", 48)}${pad("", 10)}${money(s.cost).padStart(8)}`);
-    }
   }
   // Persist what the plan doesn't cook, so next week can spend it. Only
   // prep-required items survive: anything ready-to-eat is grazed to nothing by
@@ -466,11 +430,8 @@ if (import.meta.main) {
     runId,
     storeId: STORE_ID,
     household: { adults: HOUSEHOLD.adults, children: HOUSEHOLD.children, people: PEOPLE },
-    budget: { deliveryMinimum: BUDGET.deliveryMinimum, cap: BUDGET.cap, portions: PEOPLE * meals },
+    budget: { cap: BUDGET.cap, portions: PEOPLE * meals },
     mealCost,
-    snacks,
-    snackCost,
-    shopTotal,
     multibuy: best.basket,
     carriedIn: carried,
     carriedOut: kept,
@@ -505,11 +466,9 @@ if (import.meta.main) {
     console.log(`  used from the last shop's leftovers: ${usedCarryOver.map((l) => `${l.fromCarryOver}${l.unit} ${l.term}`).join(", ")}`);
   }
 
-  const floorNote =
-    shopTotal >= BUDGET.deliveryMinimum ? "clears the floor" : "UNDER the floor";
   console.log(
-    `\n  meals ${money(mealCost)} + snacks ${money(snackCost)} = TOTAL ${money(shopTotal)} ` +
-    `(floor ${money(BUDGET.deliveryMinimum)}, cap ${money(BUDGET.cap)}, ${floorNote})`,
+    `\n  meals ${money(mealCost)} ` +
+    `(${money(mealCost / (PEOPLE * meals))}/portion, £${BUDGET.cap} cap${mealCost > BUDGET.cap ? " — OVER" : ""})`,
   );
   if (kept.length > 0) {
     console.log(`  carries to next shop (prep-required, survives the kids):`);

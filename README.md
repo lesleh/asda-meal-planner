@@ -223,9 +223,10 @@ offered again, so the list is curated by rejection rather than by rules: the dis
 mince, the aloe water, whatever, one "no" at a time. Rejections refill the list
 instantly, since snacks need no model. Accept, and it writes `data/snacks.json`.
 
-The snack list is separate from the meal shop, so the cart can add them independently:
-`bun run cart` for the meals, `bun run cart --snacks` for the snacks. Run the meal
-plan with `--no-snacks` if you would rather it never touches snacks at all.
+Snacks and the meal plan are fully separate. `bun run plan` never touches snacks, and
+`bun run snacks` never touches meals. `bun run cart` is where they meet: it adds the
+plan's shopping list and the snack list, whichever exist, and skips the missing one. So
+you can shop meals only, snacks only, or both, depending on what you have generated.
 
 ## Leftovers
 

@@ -1,5 +1,8 @@
 /**
- * Push a plan's shopping list into an ASDA basket.
+ * Push the meal plan and the snack list into an ASDA basket.
+ *
+ * Plan and snacks are separate concerns written by separate commands; this is
+ * the one place they meet. It adds whichever files exist and skips the missing.
  *
  * This is the one part of the tool that writes to ASDA rather than reading, and
  * it needs a token bound to your account, which the guest flow can't mint. You
@@ -15,7 +18,7 @@
  */
 
 import { ASDA_COMMERCE } from "../asda/commerce";
-import { PLAN_PATH, SNACKS_PATH } from "../config";
+import { BUDGET, PLAN_PATH, SNACKS_PATH } from "../config";
 
 const BASE = `https://${ASDA_COMMERCE.shortCode}.api.commercecloud.salesforce.com`;
 const SITE = ASDA_COMMERCE.channelId;
@@ -27,7 +30,11 @@ export const BOOKMARKLET =
   "alert('ASDA token copied. Paste it into the terminal.');})()";
 
 function help(): void {
-  console.log(`Push the current plan's shopping list into your ASDA basket.
+  console.log(`Fill your ASDA basket from the meal plan and the snack list.
+
+The plan and snacks are separate: \`bun run plan\` writes the meals, \`bun run
+snacks\` writes the snacks. This adds whichever exist, so run either or both
+first. If one is missing it is simply skipped.
 
 One-time setup:
 
@@ -42,25 +49,10 @@ Each time you want to shop:
 Other:
 
   bun run cart --dry-run    Show what would be added, no network, no token needed.
-  bun run cart --snacks     Add only the approved snack list (bun run snacks).
 
 The token lasts 30 minutes and is never stored. It is read from the clipboard,
 or from the ASDA_TOKEN environment variable if that is set. This fills the
 basket and stops; it never checks out.`);
-}
-
-interface ShoppingItem {
-  cin: string;
-  name: string;
-  packs: number;
-  cost: number;
-}
-
-interface Plan {
-  generatedAt: string;
-  shoppingList: ShoppingItem[];
-  /** The plan's own auto-snacks, unless it was run with --no-snacks. */
-  snacks?: CartItem[];
 }
 
 interface CartItem {
@@ -70,18 +62,20 @@ interface CartItem {
   cost: number;
 }
 
-/**
- * The meal plan's shopping list, plus its own auto-snacks. Running the plan
- * with --no-snacks leaves the snacks to the separate `bun run snacks` flow.
- */
-async function loadMealShop(): Promise<CartItem[]> {
+interface Plan {
+  generatedAt: string;
+  shoppingList: CartItem[];
+}
+
+/** The meal plan's shopping list, or nothing if no plan has been generated. */
+async function loadPlan(): Promise<CartItem[]> {
   const file = Bun.file(PLAN_PATH);
   if (!(await file.exists())) return [];
   const plan = (await file.json()) as Plan;
-  return [...plan.shoppingList, ...(plan.snacks ?? [])].filter((item) => item.packs > 0);
+  return plan.shoppingList.filter((item) => item.packs > 0);
 }
 
-/** The separately-approved snack list. */
+/** The separately-approved snack list, or nothing if none was written. */
 async function loadSnacks(): Promise<CartItem[]> {
   const file = Bun.file(SNACKS_PATH);
   if (!(await file.exists())) return [];
@@ -168,22 +162,29 @@ async function main(): Promise<void> {
   if (args.has("--help") || args.has("-h")) return help();
   if (args.has("--bookmarklet")) return installBookmarklet();
 
-  // The snacks list is its own file, approved separately via `bun run snacks`.
-  // --snacks adds only that; otherwise the meal plan's shopping list.
-  const snacksOnly = args.has("--snacks");
-  const items = snacksOnly ? await loadSnacks() : await loadMealShop();
+  // Plan and snacks are separate files. Add whichever exist; skip the missing.
+  const plan = await loadPlan();
+  const snacks = await loadSnacks();
+  const items = [...plan, ...snacks];
   if (items.length === 0) {
-    console.log(
-      snacksOnly
-        ? "no snacks — run `bun run snacks` first"
-        : "nothing to add — run `bun run plan` first",
-    );
+    console.log("nothing to add — run `bun run plan` and/or `bun run snacks` first");
     return;
   }
 
-  console.log(`${snacksOnly ? "snacks" : "meal shop"}: ${items.length} items`);
-  for (const item of items) {
-    console.log(`  ${item.packs} x ${item.name}  (cin ${item.cin})  £${item.cost.toFixed(2)}`);
+  const show = (label: string, group: CartItem[]): void => {
+    if (group.length === 0) return;
+    console.log(`${label}: ${group.length} items`);
+    for (const item of group) {
+      console.log(`  ${item.packs} x ${item.name}  (cin ${item.cin})  £${item.cost.toFixed(2)}`);
+    }
+  };
+  show("meals", plan);
+  show("snacks", snacks);
+
+  const total = items.reduce((sum, item) => sum + item.cost, 0);
+  console.log(`total £${total.toFixed(2)}`);
+  if (total < BUDGET.deliveryMinimum) {
+    console.log(`under the £${BUDGET.deliveryMinimum} delivery minimum — add more before you can check out`);
   }
 
   if (args.has("--dry-run")) {
