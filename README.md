@@ -30,15 +30,16 @@ bun install
 bun run cart:setup   # once: install the token bookmarklet (see step 3 below)
 ```
 
-## Weekly use
+## Each shop
 
-The whole flow, from nothing to a filled basket, is four steps.
+The whole flow, from nothing to a filled basket, is four steps. It runs every
+shop, which for a house that grazes fast is every couple of days, not weekly.
 
 ```bash
 # 1. Refresh prices. ~11 requests, about 3 seconds.
 bun run snapshot
 
-# 2. Generate and cost a week of meals. Takes 3-12 minutes (it makes a few
+# 2. Generate and cost a shop's meals. Takes 3-12 minutes (it makes a few
 #    model calls and revises if it is over budget or wasteful). Writes the
 #    plan to data/plan.md (open it to see the recipes and shopping list).
 bun run plan 4
@@ -53,7 +54,7 @@ bun run cart
 
 Then review the basket at asda.com and check out yourself; the tool never does.
 
-After you have cooked, record what landed so next week varies and improves:
+After you have cooked, record what landed so the next shop varies and improves:
 
 ```bash
 bun run rate "Chicken Fajitas" loved   # do it again
@@ -61,7 +62,7 @@ bun run rate "Liver and Onions" no     # never again
 ```
 
 Steps 1-2 are read-only and need no token. Step 4 is the only one that writes to
-your account. Leftovers from step 2 carry into next week's plan automatically.
+your account. Leftovers from step 2 carry into the next shop's plan automatically.
 
 ## Commands
 
@@ -140,7 +141,7 @@ the effective unit price must improve by at least `MIN_STOCKPILE_SAVING`, becaus
 saving does not justify tying up cash and freezer space.
 
 Deliberate surplus is tracked separately from leftovers. It is inventory, not waste,
-so it does not trigger the waste-revision loop, and it carries to next week.
+and it carries to the next shop as free stock.
 
 Plans also report near misses, such as "Any 3 for £12: 2 more packs for £7.62, worth
 £8.76", so a judgement call stays with you.
@@ -183,20 +184,17 @@ plan with `--no-snacks` if you would rather it never touches snacks at all.
 ## Leftovers
 
 Supermarket pack sizes do not match recipe quantities, so a plan that buys 2kg of
-potatoes to cook 800g leaves the rest in the fridge. Two things address that.
+potatoes to cook 800g leaves the rest behind. That surplus is not scored as waste:
+in this household a bigger pack is more food, not binned food, so the planner steers
+only on keeping meals under the cap, not on minimising leftovers.
 
-First, plans are scored on cost **plus** waste, so a cheaper plan that throws food
-away loses to one that eats what it buys. If more than 10% of the shop goes uneaten,
-the plan goes back to the model with the itemised leftovers and a request to use
-them up.
-
-Second, whatever is genuinely left over persists to `data/carryover.json` and is
-offered to the next run as free stock. Each item gets a shelf life derived from its
-department, so a plan will build around a bag of frozen peas from last month but
-never around fresh chicken from a fortnight ago.
-
-In practice this took a real plan from 21% waste to 8%, and the following week's
-plan cooked 200g of carried-over chicken rather than buying more.
+What matters is what survives to the next shop. Only prep-required leftovers carry
+over: raw potatoes, a part-used bag of frozen peas, things that need cooking. Anything
+ready-to-eat is grazed to nothing by the children within the day, so carrying it
+forward would be a fiction. What does survive persists to `data/carryover.json` and
+is offered to the next run as free stock, each item with a shelf life derived from its
+department, so a plan builds around frozen peas from last month but never around fresh
+chicken from a fortnight ago.
 
 ## How the data is sourced
 
