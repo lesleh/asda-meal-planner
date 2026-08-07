@@ -13,7 +13,7 @@
 import { Database } from "bun:sqlite";
 import { DB_PATH } from "../config";
 import { PREFERENCES, type Preference, rejectionFor } from "./preferences";
-import { qualityWeight, tierOf } from "./quality";
+import { isPreparedMeal, qualityWeight, tierOf } from "./taxonomy";
 
 
 export interface Candidate {
@@ -133,19 +133,6 @@ const toCandidate = (row: Row): Candidate => ({
   noGluten: row.no_gluten === 1,
   rank: row.rank,
 });
-
-/**
- * Departments and shelves that hold finished dishes rather than ingredients. A
- * recipe asks for "macaroni", not a macaroni cheese ready meal, so these are
- * dropped before the shelf is chosen: otherwise the dozen "Macaroni Cheese"
- * ready meals outvote the two bags of dry pasta and the resolver lands on a
- * microwave meal. Deliberately narrow (no bare "instant", which would catch
- * instant coffee) to avoid excluding real ingredients.
- */
-const PREPARED_MEAL = /ready meal|microwave|pasta pots?|noodle pots?|pasta & sauce|tinned pasta/i;
-
-export const isPreparedMeal = (product: { department: string | null; shelf: string | null }): boolean =>
-  PREPARED_MEAL.test(`${product.department ?? ""} ${product.shelf ?? ""}`);
 
 /**
  * Normalised token set. Crude plural stripping is enough here because both

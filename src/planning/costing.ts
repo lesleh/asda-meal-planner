@@ -13,7 +13,7 @@ import { type Candidate, latestRun, resolveIngredient } from "./ingredients";
 import { carryOverKey } from "./leftovers";
 import { MIN_STOCKPILE_SAVING, WILL_FREEZE } from "../config";
 import { isStockpilable, loadRules, promoIdsFor } from "./multibuy";
-import { qualityWeight } from "./quality";
+import { qualityWeight } from "./taxonomy";
 import { DB_PATH } from "../config";
 
 

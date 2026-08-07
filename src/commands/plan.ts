@@ -16,7 +16,7 @@ import { buildArtifact, renderMarkdown } from "../planning/report";
 import { validateRecipes, validateResolution } from "../planning/validate";
 import { preferenceLines } from "../planning/preferences";
 import { addDislike, dislikeLines, loadDislikes, parseBans } from "../planning/dislikes";
-import { isGrazeable } from "../planning/grazeable";
+import { isGrazeable } from "../planning/taxonomy";
 import { selectSnacks, type SnackPick } from "../snacks/select";
 import { blockedCins } from "../snacks/blocklist";
 import { loadRules, priceBasket, type BasketItem } from "../planning/multibuy";

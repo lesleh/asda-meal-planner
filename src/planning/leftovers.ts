@@ -9,6 +9,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { CARRYOVER_PATH, DATA_DIR } from "../config";
+import { shelfLifeDays } from "./taxonomy";
 
 export interface CarryOverItem {
   term: string;
@@ -19,29 +20,6 @@ export interface CarryOverItem {
   /** ISO date after which it is assumed inedible and dropped. */
   expiresAt: string;
   department?: string;
-}
-
-/**
- * Days a leftover stays usable, by department keyword. Deliberately
- * conservative: over-estimating shelf life silently plans meals around food
- * that has gone off, which is worse than buying a second bag of onions.
- */
-const SHELF_LIFE_DAYS: [RegExp, number][] = [
-  [/frozen/i, 90],
-  [/tinned|rice, pasta|condiments|home baking|cooking sauces|jams|cereal/i, 180],
-  [/meat|poultry|fish|seafood/i, 3],
-  [/vegetables|fruit|salad|bakery|bread/i, 5],
-  [/milk|cheese|yogurt|cooked meat|dairy|eggs/i, 7],
-];
-
-const DEFAULT_SHELF_LIFE_DAYS = 10;
-
-export function shelfLifeDays(department: string | undefined): number {
-  if (!department) return DEFAULT_SHELF_LIFE_DAYS;
-  for (const [pattern, days] of SHELF_LIFE_DAYS) {
-    if (pattern.test(department)) return days;
-  }
-  return DEFAULT_SHELF_LIFE_DAYS;
 }
 
 const addDays = (from: Date, days: number): Date =>

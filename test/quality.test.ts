@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { VALUE_TIER_PENALTY } from "../src/config";
-import { qualityWeight, tierOf } from "../src/planning/quality";
+import { qualityWeight, tierOf } from "../src/planning/taxonomy";
 
 describe("tierOf", () => {
   test("reads ASDA's value tier from the brand, case-insensitively", () => {

@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { DB_PATH } from "../src/config";
-import { TERM_SHELF_HINTS, isPreparedMeal, latestRun, resolveIngredient } from "../src/planning/ingredients";
+import { TERM_SHELF_HINTS, latestRun, resolveIngredient } from "../src/planning/ingredients";
+import { isPreparedMeal } from "../src/planning/taxonomy";
 
 const db = new Database(DB_PATH, { readonly: true });
 let runId: number;

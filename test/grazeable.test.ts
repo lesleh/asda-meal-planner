@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isGrazeable, needsPreparation } from "../src/planning/grazeable";
+import { isGrazeable, needsPreparation } from "../src/planning/taxonomy";
 
 describe("isGrazeable", () => {
   test("ready-to-eat departments are grazeable", () => {

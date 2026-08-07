@@ -13,7 +13,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { shelfLifeDays } from "./leftovers";
+import { shelfLifeDays } from "./taxonomy";
 
 export type MultibuyMechanic =
   /** N items for a fixed total, e.g. "Any 3 for £12". */

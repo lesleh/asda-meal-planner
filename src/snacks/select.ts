@@ -10,7 +10,7 @@
  */
 
 import type { Database } from "bun:sqlite";
-import { isGrazeable } from "../planning/grazeable";
+import { isDrink, isGenuineCut, isGrazeable } from "../planning/taxonomy";
 import { PREFERENCES, rejectionFor } from "../planning/preferences";
 
 export interface SnackPick {
@@ -53,36 +53,6 @@ export interface SnackOptions {
 }
 
 /**
- * A genuine reduction, not a multibuy or a flat list price. `Rollback` and
- * `Dropped` are ASDA's own labels for real cuts; multibuys are excluded because
- * their "saving" is often illusory and needs the whole group to realise.
- */
-const GENUINE_CUT = /rollback|dropped/i;
-
-/**
- * Drinks are grazeable but they are not snacks: squash, juice, fizzy, water,
- * coconut water and the like belong in a drinks line of their own, not the
- * snack allowance. Excluded here so the picker never offers three squashes.
- */
-const DRINK = new RegExp(
-  [
-    "squash|cordial",
-    "fizzy|cola|lemonade",
-    "juice|smoothie",
-    "\\bwater\\b|coconut water|tonic|mixer",
-    "energy.*drink|sports.*drink|health.*drink|soft drink",
-    "milk drink|milkshake|yogurt drink|drinking yogurt",
-    "lunchbox drink|kids.*drink",
-    "\\bdrink\\b", // catches bare "... Flavoured Drink" names
-    "coffee|\\btea\\b",
-  ].join("|"),
-  "i",
-);
-
-const isDrink = (department: string | null, shelf: string | null, name: string): boolean =>
-  DRINK.test(`${department ?? ""} ${shelf ?? ""} ${name}`);
-
-/**
  * Pick snacks to fill the cart up to `targetSpend`.
  *
  * Order is weighted-random, not a fixed ranking: better discounts are more
@@ -118,7 +88,7 @@ export function selectSnacks(
     // Drinks are grazeable but not snacks.
     if (isDrink(row.department, row.shelf, row.name)) return false;
     // Only genuine cuts, not multibuys or list prices.
-    if (!GENUINE_CUT.test(row.offer_label ?? "")) return false;
+    if (!isGenuineCut(row.offer_label)) return false;
     // Respect the same household preferences the resolver enforces.
     if (rejectionFor({ name: row.name, shelf: row.shelf }, PREFERENCES)) return false;
     return true;
