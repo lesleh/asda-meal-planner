@@ -184,8 +184,10 @@ bun run rate "Chicken Fajitas" loved      # do that one again
 bun run rate "Liver and Onions" no        # never again
 ```
 
-History is tracked in git, unlike the rest of `data/`. The snapshot rebuilds in three
-seconds; a year of "the children actually ate this" does not.
+History is kept local (`data/history.json`, gitignored) like the blocklist and dislikes:
+it is personal usage data, and the file on disk is all the persistence a single-machine
+tool needs. The snapshot rebuilds in three seconds; a year of "the children actually ate
+this" does not, so don't delete it lightly.
 
 ## Choosing recipes
 

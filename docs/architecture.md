@@ -81,14 +81,16 @@ Dependencies flow one way, up toward `commands/`, with no cycles.
 
 ## State
 
-Everything in `data/` is regenerable and gitignored, except two files that are not:
+All of `data/` is gitignored. Most of it is regenerable; two files are real state that
+is not, so losing them costs something even though nothing tracks them:
 
-- **`history.json`** (tracked). Past recipes, repeat counts and your verdicts. Drives
-  variety and favourites. The snapshot rebuilds in seconds; a year of "the children
-  actually ate this" cannot, so it is version-controlled.
-- **`carryover.json`** (ignored, but real state). Leftovers from the last plan, offered
-  to the next run as free stock with a per-department shelf life. This is what makes
-  buying a whole pack to use half of it not a waste.
+- **`history.json`**. Past recipes, repeat counts and your verdicts. Drives variety and
+  favourites. The snapshot rebuilds in seconds; a year of "the children actually ate
+  this" does not. Kept local rather than tracked: it is personal usage data on a
+  single-machine tool, and git would only leak eating habits to a public repo.
+- **`carryover.json`**. Leftovers from the last plan, offered to the next run as free
+  stock with a per-department shelf life. This is what makes buying a whole pack to use
+  half of it not a waste.
 
 ## Cross-cutting decisions
 

@@ -13,8 +13,9 @@ export const PLAN_MD_PATH = `${ROOT}data/plan.md`;
 /** Directory holding all generated state. */
 export const DATA_DIR = `${ROOT}data`;
 /**
- * Recipe history. The only state here that cannot be regenerated, so it is
- * tracked in git rather than ignored with the rest of `data/`.
+ * Recipe history: past dishes, repeat counts and ratings. Gitignored, kept
+ * local like the blocklist and dislikes: it is personal usage data, and the
+ * file on disk is all the persistence a single-machine tool needs.
  */
 export const HISTORY_PATH = `${ROOT}data/history.json`;
 /** Leftovers carried from the previous plan. */

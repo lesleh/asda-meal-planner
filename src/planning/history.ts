@@ -7,8 +7,10 @@
  * somewhere to record the meals worth having again.
  *
  * Stored as readable JSON rather than in the snapshot database, because it is
- * the one piece of state here that cannot be regenerated. The snapshot can be
- * rebuilt in three seconds; a year of "the children actually ate this" cannot.
+ * personal usage data that cannot be regenerated: the snapshot rebuilds in
+ * three seconds, a year of "the children actually ate this" does not. Kept
+ * local (gitignored) like the blocklist and dislikes; the file on disk is the
+ * persistence, git tracking would only leak eating habits to a public repo.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

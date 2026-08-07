@@ -13,10 +13,9 @@ data/snacks.json
 # Leftovers carried between shops; rewritten by every plan.
 data/carryover.json
 
-# The snack blocklist and the dislikes list are personal taste; kept local so
-# they never go public and never cause pull conflicts.
+# Personal usage data: taste, ratings and past recipes. Kept local so it never
+# goes public and never causes pull conflicts. Persistence comes from the file
+# on disk; a single-machine tool has no need to version-control it.
 data/blocklist.json
 data/dislikes.json
-
-# Recipe history cannot be regenerated (it is hand-curated), so it is tracked.
-!data/history.json
+data/history.json
