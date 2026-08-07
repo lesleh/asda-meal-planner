@@ -14,7 +14,7 @@ So the split is strict:
 
 - The model chooses dishes, names ingredients as search terms, pins an ambiguous shelf
   when it knows better than the data, and writes cooking methods.
-- Code does every calculation: pack selection, unit conversion, waste, multibuy pricing,
+- Code does every calculation: pack selection, unit conversion, multibuy pricing,
   budget totals, carry-over. The model never sees a total it produced itself treated as
   the answer; it only ever _responds_ to numbers code computed.
 
@@ -28,41 +28,56 @@ snapshot ──▶ resolve ──▶ cost ──▶ multibuy ──▶ plan loop
  (data)     (fuzzy)    (exact)    (exact)     (model+code)   (output)    (write)
 ```
 
-1. **Snapshot** (`snapshot.ts` + `search.ts`). Pull the in-stock food catalogue into
+1. **Snapshot** (`asda/snapshot.ts` + `asda/search.ts`). Pull the in-stock food catalogue into
    SQLite, ~11 Algolia requests. Everything downstream reads this file, never the live
    API, so an upstream change degrades to stale prices rather than an outage. An FTS5
    index over product names powers resolution.
 
-2. **Resolve** (`ingredients.ts`). Turn a search term into the product to buy. This is
+2. **Resolve** (`planning/ingredients.ts`). Turn a search term into the product to buy. This is
    the only fuzzy step, and where every resolution bug has lived. Candidates are
    clustered by ASDA's shelf taxonomy, and the shelf is scored by coverage then
    specificity, which separates `Onions & Leeks` from `Pickled Onions & Vegetables`.
    Genuinely ambiguous staples (`milk`, `butter`, `potatoes`) use a curated hint map;
-   preferences (`preferences.ts`) reject unwanted products here, not just in the prompt,
+   preferences (`planning/preferences.ts`) reject unwanted products here, not just in the prompt,
    because the model picks the term but the resolver picks the product.
 
-3. **Cost** (`plan.ts`). Aggregate demand across all recipes _before_ choosing packs, so
+3. **Cost** (`planning/costing.ts`). Aggregate demand across all recipes _before_ choosing packs, so
    ingredient sharing falls out for free and nothing is bought twice. Pick the pack that
    minimises cost for the quantity needed, not the best unit price (a 7.5kg potato sack
    wins on £/kg and loses on total). Reconcile recipe units against pack units, flagging
    what cannot be converted rather than guessing.
 
-4. **Multibuy** (`multibuy.ts`). Price promotions across the whole basket, since groups
+4. **Multibuy** (`planning/multibuy.ts`). Price promotions across the whole basket, since groups
    are mix-and-match. Optionally buy up to a threshold, guarded by whether the surplus is
    storable and the saving worth it. See `docs/api-notes.md` for how promotions are
    encoded.
 
-5. **Plan loop** (`mealplan.ts`). The one place model and code interleave. Generate
-   recipes, cost them, and if the plan is over budget or over the waste threshold, hand
-   the model the itemised overspend or leftovers and ask for a revision. Up to three
-   attempts; the best by cost-plus-waste is kept.
+5. **Plan loop** (`commands/plan.ts`). The one place model and code interleave. Generate
+   recipes, cost them, and if the meals come in over the cap, hand the model the itemised
+   overspend and ask for a revision. Up to three attempts; the cheapest is kept. Surplus
+   is not scored as waste: this household eats it rather than binning it.
 
-6. **Artifact** (`report.ts`). Write `data/plan.md` (to cook and shop from) and
+6. **Artifact** (`planning/report.ts`). Write `data/plan.md` (to cook and shop from) and
    `data/plan.json` (structured, re-costable). The model's raw output alone is not a
    plan; the resolved products, prices and methods are.
 
-7. **Cart** (`cart.ts`). The only write path. Push the shopping list to a basket via a
+7. **Cart** (`commands/cart.ts`). The only write path. Push the shopping list to a basket via a
    pasted account token, and stop before checkout.
+
+## Layout
+
+`src/` is grouped by role, so the four things you run are separate from the modules they
+orchestrate:
+
+- **`asda/`** reaches or models ASDA's data: `search` (Algolia), `snapshot` (ingest to
+  SQLite), `packsize` (parse pack strings), `commerce` (Commerce Cloud constants).
+- **`planning/`** is the meal-planning brain, all pure-ish logic: `ingredients`, `costing`,
+  `multibuy`, `leftovers`, `grazeable`, `preferences`, `history`, `report`, `validate`.
+- **`snacks/`** is the snack feature: `select` (weighted-random pick) and `blocklist`.
+- **`commands/`** holds the entrypoints `bun run` targets: `plan`, `snacks`, `cart`, `rate`.
+- **`config.ts`** sits at the root; every group reads it and it imports nothing.
+
+Dependencies flow one way, up toward `commands/`, with no cycles.
 
 ## State
 

@@ -9,13 +9,15 @@ Everything here is reachable without an ASDA account, except writing to a basket
 ## The three backends
 
 ASDA's grocery site is a headless-commerce PWA sitting on top of three separate
-services. The planner uses the first; the others are optional.
+services. The planner reads Algolia and writes baskets to Commerce Cloud; the SCAPI
+product-detail client and the Amplience client were built during reverse-engineering
+and later removed, so this section documents all three but the code now touches two.
 
-| Backend                     | Module                              | Auth                                                           | Carries                                                           |
-| --------------------------- | ----------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Algolia                     | `search.ts`                         | Public search key                                              | Prices, promotions, per-store stock, category tree, dietary flags |
-| Salesforce Commerce (SCAPI) | `slas.ts`, `products.ts`, `cart.ts` | Self-minted guest token, or a pasted account token for baskets | Full product detail, Brandbank nutrition, baskets                 |
-| Amplience                   | `amplience.ts`                      | None                                                           | CMS page templates (labels, layout). Not used by the planner.     |
+| Backend                     | Module (current code)                  | Auth                                                           | Carries                                                           |
+| --------------------------- | -------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Algolia                     | `asda/search.ts`                       | Public search key                                              | Prices, promotions, per-store stock, category tree, dietary flags |
+| Salesforce Commerce (SCAPI) | `asda/commerce.ts`, `commands/cart.ts` | Pasted account token for baskets (guest-token flow documented) | Baskets (write). Product detail and Brandbank nutrition: removed  |
+| Amplience                   | removed (see history)                  | None                                                           | CMS page templates (labels, layout). Never used by the planner.   |
 
 ## Algolia (search and promotions)
 
@@ -33,9 +35,9 @@ Load-bearing facts discovered the hard way:
 
 - **The "special offers" page is not a separate endpoint.** It is the same index with
   `ruleContexts: ["AllOffers_EN"]`, an Algolia server-side rule that rewrites the query
-  to promotional lines only. 23k products becomes ~6k. See `RULE_CONTEXTS` in `search.ts`.
+  to promotional lines only. 23k products becomes ~6k. See `RULE_CONTEXTS` in `asda/search.ts`.
 - **The offers rule partitions cleanly** into "has a `PROMOS.EN` entry" or "`WASPRICE >
-PRICE`", with nothing left over. That is why `snapshot.ts` derives the `on_offer` flag
+PRICE`", with nothing left over. That is why `asda/snapshot.ts` derives the `on_offer` flag
   locally instead of issuing a second query, and it doubles as a check on ASDA's rule: if
   the two ever diverge, their merchandising config changed.
 - **Store id `4618` is threaded through the filter.** Stock is a nested attribute
@@ -48,7 +50,7 @@ PRICE`", with nothing left over. That is why `snapshot.ts` derives the `on_offer
   `Products_query_suggestions` exist alongside `ASDA_PRODUCTS`.
 - **Field quirks:** `IS_FROZEN`/`IS_FTO` are real booleans despite the filter DSL
   comparing them numerically (`IS_FTO=0`); `PRICES.EN` is a rich object, not a scalar;
-  `PACK_SIZE` is free text (`4X115G`, `12X330`, `EACH`) parsed by `packsize.ts`.
+  `PACK_SIZE` is free text (`4X115G`, `12X330`, `EACH`) parsed by `asda/packsize.ts`.
 - **`CIN` is ASDA's product id** and the primary key everywhere: Algolia `objectID`,
   SCAPI `productId`, and the basket `productId` are all the same CIN.
 
@@ -61,16 +63,17 @@ PRICE`", with nothing left over. That is why `snapshot.ts` derives the `on_offer
   `www.asda.com/mobify/proxy/...`. The proxy path sits behind Cloudflare bot protection
   and returns a 403 challenge page without a `cf_clearance` cookie; the origin returns
   200 clean with just the bearer token.
-- **Guest tokens are self-mintable.** `slas.ts` runs the public-client PKCE guest flow
+- **Guest tokens are self-mintable.** The public-client PKCE guest flow mints a token
   using client id `e68ca36d-6516-4704-b705-06b74f85ef2e` (from the token's `sub`). The
   authorize step 303-redirects with the auth code in the `Location` header, so redirects
-  must not be followed. Tokens last 30 minutes; the client caches with a 60s skew and
-  refreshes.
+  must not be followed. Tokens last 30 minutes. A client that ran this flow was removed
+  with the product-detail path; the recipe is documented here and recoverable from history.
 - **A guest token already has basket write scope** (`sfcc.shopper-baskets-orders.rw`).
   SLAS scopes are per-client, not per-user, so even the anonymous token can create and
   fill a basket. It just is not _your_ basket.
 - **`c_BRANDBANK_JSON` is double-encoded** JSON, a string inside the parsed response. It
-  holds nutrition, allergens, cooking and storage. `products.ts` re-parses it.
+  holds nutrition, allergens, cooking and storage. A parser for it lived in the
+  product-detail client, removed with that path.
 - SCAPI namespaces merchant attributes with `c_`; un-prefixed fields are Salesforce's
   own schema. A multi-product request caps at 24 ids.
 
@@ -82,14 +85,14 @@ PRICE`", with nothing left over. That is why `snapshot.ts` derives the `on_offer
 - **Your account vs a guest basket.** A self-minted guest token fills an anonymous
   basket unconnected to any login. To target your real cart you need a token minted
   after your ASDA login, which goes through Azure AD B2C (`uido:azure_adb2c-signin` in
-  the token) and cannot be scripted without your credentials. So `cart.ts` takes a token
+  the token) and cannot be scripted without your credentials. So `commands/cart.ts` takes a token
   pasted from a logged-in browser session instead.
 - **The account token is a readable cookie.** `SLAS.AUTH_TOKEN` is not HttpOnly
   (confirmed via the `is_httponly` flag in Chrome's cookie store), so a one-line
   bookmarklet reads it with `document.cookie` and copies it. No decryption, no keychain.
   It is stored URL-encoded as `Bearer%20eyJ...`; `decodeURIComponent` restores it.
 - **The customer id is in the token.** The `isb` claim carries `rcid:<id>`, which is the
-  SCAPI customer id. `cart.ts` reads it to find and reuse your existing basket rather
+  SCAPI customer id. `commands/cart.ts` reads it to find and reuse your existing basket rather
   than creating a duplicate.
 
 ## Security and etiquette

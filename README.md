@@ -40,7 +40,7 @@ shop, which for a house that grazes fast is every couple of days, not weekly.
 bun run snapshot
 
 # 2. Generate and cost a shop's meals. Takes 3-12 minutes (it makes a few
-#    model calls and revises if it is over budget or wasteful). Writes the
+#    model calls and revises if the meals come in over the cap). Writes the
 #    plan to data/plan.md (open it to see the recipes and shopping list).
 bun run plan 4
 
@@ -66,19 +66,19 @@ your account. Leftovers from step 2 carry into the next shop's plan automaticall
 
 ## Commands
 
-| Command                                    | What it does                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `bun run snapshot`                         | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run             |
-| `bun run snapshot:diff`                    | Diff the two most recent runs without fetching                                                         |
-| `bun run plan [meals]`                     | Generate recipes, cost them, retry if over budget or wasteful. Defaults to 4 meals. Takes 3-12 minutes |
-| `bun run rate`                             | List everything cooked so far, with repeat counts and cost per person                                  |
-| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions                                       |
-| `bun run cart:setup`                       | Copy the token-grabbing bookmarklet to your clipboard, with install instructions                       |
-| `bun run cart --dry-run`                   | Show the shopping list that would be added, no network                                                 |
-| `bun run cart`                             | Add the current plan's shopping list to your ASDA basket (needs a pasted token)                        |
-| `bun run search <term>`                    | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`                       |
-| `bun test`                                 | Unit tests for pack parsing and ingredient resolution                                                  |
-| `bun run check-types`                      | `tsc --noEmit`                                                                                         |
+| Command                                    | What it does                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `bun run snapshot`                         | Pull the in-stock food catalogue into `data/snapshot.db` and diff against the previous run               |
+| `bun run snapshot:diff`                    | Diff the two most recent runs without fetching                                                           |
+| `bun run plan [meals]`                     | Generate recipes, cost them, retry if the meals go over the cap. Defaults to 4 meals. Takes 3-12 minutes |
+| `bun run rate`                             | List everything cooked so far, with repeat counts and cost per person                                    |
+| `bun run rate "<name>" <loved\|liked\|no>` | Record what the household thought; drives repeats and exclusions                                         |
+| `bun run cart:setup`                       | Copy the token-grabbing bookmarklet to your clipboard, with install instructions                         |
+| `bun run cart --dry-run`                   | Show the shopping list that would be added, no network                                                   |
+| `bun run cart`                             | Add the current plan's shopping list to your ASDA basket (needs a pasted token)                          |
+| `bun run search <term>`                    | Resolve an ingredient to products, e.g. `bun run search onions "chicken thighs"`                         |
+| `bun test`                                 | Unit tests for pack parsing and ingredient resolution                                                    |
+| `bun run check-types`                      | `tsc --noEmit`                                                                                           |
 
 ## Configuration
 
@@ -87,7 +87,7 @@ Everything tunable lives in `src/config.ts`.
 - `HOUSEHOLD` sets adults, children, the child portion fraction, and the per-portion budget
 - `PANTRY` lists ingredients assumed already owned, so a plan does not buy a litre of oil to use 45ml
 - `STORE_ID` selects the store that stock and pricing are scoped to
-- `PREFERENCES` in `src/preferences.ts` rejects products the household won't eat
+- `PREFERENCES` in `src/planning/preferences.ts` rejects products the household won't eat
 - `DIETARY_NOTES` in the same file guides the model without filtering products
 
 ## Preferences
@@ -198,20 +198,23 @@ chicken from a fortnight ago.
 
 ## How the data is sourced
 
-Three separate ASDA backends, all reached without any account credentials.
+Two ASDA backends, neither needing an account credential to read.
 
-- **Algolia** (`src/search.ts`) is the product search index. Public search key, no auth.
-  Carries prices, promotions, stock per store, the category tree and dietary flags.
-  The `AllOffers_EN` rule context is what the site's own offers page uses.
-- **Salesforce Commerce** (`src/slas.ts`, `src/products.ts`) supplies full product
-  detail including Brandbank nutrition and allergens. Mints its own guest token via
-  the public PKCE flow, so nothing depends on a captured browser session. Optional:
-  meal planning does not need it.
-- **Amplience** (`src/amplience.ts`) serves CMS page templates. Included for
-  completeness; not used by the planner.
+- **Algolia** (`src/asda/search.ts`) is the product search index and the planner's only
+  data source. Public search key, no auth. Carries prices, promotions, stock per store,
+  the category tree and dietary flags. The `AllOffers_EN` rule context is what the
+  site's own offers page uses.
+- **Salesforce Commerce** (`src/asda/commerce.ts`) is written to, not read from: the
+  cart flow adds items to your basket using a token pasted from a logged-in browser
+  session. Only the published connection constants live here.
 
-Note that the Salesforce API is reached at its origin host rather than through
+The Commerce API is reached at its origin host rather than through
 `www.asda.com/mobify/proxy/`, which sits behind bot protection.
+
+A third path was explored and removed: a Commerce Cloud product-detail client (Brandbank
+nutrition and allergens) that minted its own guest token via public PKCE, plus an
+Amplience CMS client. The planner never needed either; both are recoverable from git
+history if per-product enrichment is ever wanted.
 
 ## Known limitations
 
@@ -223,7 +226,7 @@ Note that the Salesforce API is reached at its origin host rather than through
 - **Some units cannot be reconciled.** A recipe wanting "2 onions" against a 1kg bag
   has no per-item weight anywhere in the data. Those lines are flagged rather than
   guessed, and priced as a single pack.
-- **Ambiguous ingredients need a hint.** `TERM_SHELF_HINTS` in `src/ingredients.ts`
+- **Ambiguous ingredients need a hint.** `TERM_SHELF_HINTS` in `src/planning/ingredients.ts`
   records the shelf for staples whose bare name is ambiguous, because scoring cannot
   separate `Whole Milk` from `Milk Drinks`. Tests assert every hint still resolves.
 - **Snapshots go stale.** Prices and promotions change daily. Re-run `bun run snapshot`
