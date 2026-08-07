@@ -135,6 +135,19 @@ const toCandidate = (row: Row): Candidate => ({
 });
 
 /**
+ * Departments and shelves that hold finished dishes rather than ingredients. A
+ * recipe asks for "macaroni", not a macaroni cheese ready meal, so these are
+ * dropped before the shelf is chosen: otherwise the dozen "Macaroni Cheese"
+ * ready meals outvote the two bags of dry pasta and the resolver lands on a
+ * microwave meal. Deliberately narrow (no bare "instant", which would catch
+ * instant coffee) to avoid excluding real ingredients.
+ */
+const PREPARED_MEAL = /ready meal|microwave|pasta pots?|noodle pots?|pasta & sauce|tinned pasta/i;
+
+export const isPreparedMeal = (product: { department: string | null; shelf: string | null }): boolean =>
+  PREPARED_MEAL.test(`${product.department ?? ""} ${product.shelf ?? ""}`);
+
+/**
  * Normalised token set. Crude plural stripping is enough here because both
  * sides go through it: "tomatoes" and "Tomatoes" both become "tomatoe", which
  * is wrong as English but consistent as a key.
@@ -252,10 +265,15 @@ export function resolveIngredient(
   }
 
   const all = rows.map(toCandidate);
+  // Drop finished dishes so an ingredient can't resolve to a ready meal. Fall
+  // back to the full set only if that leaves nothing, so a term that genuinely
+  // exists only as a prepared product still resolves rather than vanishing.
+  const usable = all.filter((candidate) => !isPreparedMeal(candidate));
+  const pool = usable.length > 0 ? usable : all;
 
   // Cluster by shelf, preserving best (lowest) FTS rank per shelf.
   const byShelf = new Map<string, Candidate[]>();
-  for (const candidate of all) {
+  for (const candidate of pool) {
     if (!candidate.shelf) continue;
     const bucket = byShelf.get(candidate.shelf) ?? [];
     bucket.push(candidate);
@@ -289,7 +307,7 @@ export function resolveIngredient(
     } else {
       // No shelf names the ingredient; fall back to where the matches cluster.
       const votes = new Map<string, number>();
-      for (const candidate of all.slice(0, 10)) {
+      for (const candidate of pool.slice(0, 10)) {
         if (candidate.shelf) votes.set(candidate.shelf, (votes.get(candidate.shelf) ?? 0) + 1);
       }
       shelf = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
@@ -297,7 +315,7 @@ export function resolveIngredient(
     }
   }
 
-  const onShelf = shelf ? (byShelf.get(shelf) ?? []) : all;
+  const onShelf = shelf ? (byShelf.get(shelf) ?? []) : pool;
 
   // Second stage: within the chosen shelf, the name must still mention the
   // ingredient. This is what drops the ginger from `Garlic & Ginger` — it

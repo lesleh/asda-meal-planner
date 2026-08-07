@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { DB_PATH } from "../src/config";
-import { TERM_SHELF_HINTS, latestRun, resolveIngredient } from "../src/planning/ingredients";
+import { TERM_SHELF_HINTS, isPreparedMeal, latestRun, resolveIngredient } from "../src/planning/ingredients";
 
 const db = new Database(DB_PATH, { readonly: true });
 let runId: number;
@@ -88,5 +88,24 @@ describe("query invariance", () => {
     for (const term of ["onion", "garden peas", "fusilli", "potatoes", "milk", "chicken breast"]) {
       expect(resolveIngredient(db, runId, term).best).toBeDefined();
     }
+  });
+});
+
+describe("prepared meals are not ingredients", () => {
+  test("isPreparedMeal flags ready meals and prepared pots, not raw shelves", () => {
+    expect(isPreparedMeal({ department: "Ready Meals", shelf: "Italian & Mediterranean" })).toBe(true);
+    expect(isPreparedMeal({ department: "Frozen Ready Meals", shelf: "Frozen Italian Meals" })).toBe(true);
+    expect(isPreparedMeal({ department: "Tinned Food", shelf: "Tinned Pasta" })).toBe(true);
+    expect(isPreparedMeal({ department: "Rice, Pasta & Noodles", shelf: "Microwave Pasta" })).toBe(true);
+    expect(isPreparedMeal({ department: "Rice, Pasta & Noodles", shelf: "Pasta Tubes, Shells & Spirals" })).toBe(false);
+    // Narrow on purpose: "instant" alone must not catch instant coffee.
+    expect(isPreparedMeal({ department: "Coffee, Tea & Hot Chocolate", shelf: "Regular Instant Coffee" })).toBe(false);
+  });
+
+  test("macaroni resolves to dry pasta, not a macaroni cheese ready meal", () => {
+    const result = resolveIngredient(db, runId, "macaroni");
+    expect(result.best).toBeDefined();
+    expect(result.best!.name).not.toMatch(/cheese/i);
+    expect(result.best!.department ?? "").not.toMatch(/ready meal/i);
   });
 });
