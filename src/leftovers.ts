@@ -107,39 +107,3 @@ export function saveCarryOver(
   writeFileSync(CARRYOVER_PATH, JSON.stringify(items, null, 2));
   return items;
 }
-
-export interface WasteLine {
-  term: string;
-  unit: string;
-  leftover: number;
-  bought: number;
-  value: number;
-}
-
-/**
- * Money sitting in food the plan buys but doesn't cook.
- *
- * Valued at the pack's unit price, so 200g left from a 1.1kg pack of chicken
- * carries its share of that pack's cost.
- */
-export function computeWaste(
-  lines: { term: string; unit: string; leftover: number; bought: number; cost: number }[],
-): { total: number; lines: WasteLine[] } {
-  const wasted: WasteLine[] = [];
-  let total = 0;
-
-  for (const line of lines) {
-    if (line.leftover <= 0 || line.bought <= 0 || line.cost <= 0) continue;
-    const value = (line.cost / line.bought) * line.leftover;
-    total += value;
-    wasted.push({
-      term: line.term,
-      unit: line.unit,
-      leftover: line.leftover,
-      bought: line.bought,
-      value: Math.round(value * 100) / 100,
-    });
-  }
-
-  return { total: Math.round(total * 100) / 100, lines: wasted.sort((a, b) => b.value - a.value) };
-}

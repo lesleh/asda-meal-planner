@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { carryOverIndex, computeWaste, shelfLifeDays, type CarryOverItem } from "../src/leftovers";
+import { carryOverIndex, shelfLifeDays, type CarryOverItem } from "../src/leftovers";
 
 describe("shelfLifeDays", () => {
   test("fresh meat expires fast", () => {
@@ -41,31 +41,5 @@ describe("carryOverIndex", () => {
     const index = carryOverIndex(items);
     expect(index.get("garlic|ea")).toBe(2);
     expect(index.get("garlic|g")).toBe(50);
-  });
-});
-
-describe("computeWaste", () => {
-  test("values leftovers at the pack's unit price", () => {
-    const result = computeWaste([
-      { term: "chicken", unit: "g", leftover: 200, bought: 1100, cost: 3.29 },
-    ]);
-    expect(result.lines[0]!.value).toBeCloseTo(0.6, 2);
-  });
-
-  test("ignores lines that cost nothing or waste nothing", () => {
-    const result = computeWaste([
-      { term: "oil", unit: "ml", leftover: 900, bought: 1000, cost: 0 },
-      { term: "rice", unit: "g", leftover: 0, bought: 1000, cost: 1.79 },
-    ]);
-    expect(result.lines).toEqual([]);
-    expect(result.total).toBe(0);
-  });
-
-  test("sorts by value so the worst offender leads", () => {
-    const result = computeWaste([
-      { term: "cheap", unit: "g", leftover: 10, bought: 100, cost: 1 },
-      { term: "dear", unit: "g", leftover: 50, bought: 100, cost: 4 },
-    ]);
-    expect(result.lines[0]!.term).toBe("dear");
   });
 });
